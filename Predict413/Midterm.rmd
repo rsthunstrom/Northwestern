@@ -59,9 +59,8 @@ monthplot(monthly_ts_12yr,ylab="Precipitation",xlab="Year",xaxt="n",
   main="Seasonal deviation plot: Monthly Precipitation from July, 2002 to July, 2014")
 axis(1,at=1:12,labels=month.abb,cex=0.8)
 ```
----
+
 The above seasonal plot portrays the mean value across all years by month along the horizontal lines and the range of values on the vertial line.  Here we can see the same trend that overall there are some patterns by month as visualized by the mean, but there is still a large variation across any month.  
----
 
 Lastly, let's look at how the precipitation totals are distributed.  From a daily standpoint, we notice that we have quite a few 0 values. This of course makes sense because we don't get precipitation every day.
 
