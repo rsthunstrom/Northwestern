@@ -33,14 +33,14 @@ df<- data.frame(comp_data_month_year)
 comp_data_df<- setNames(df, c("Month", "Year", "PRCP"))
 ```
 
-```{r echo=FALSE}
+```{r}
 plot(comp_data_df$Year, comp_data_df$PRCP, xlab = "Year", ylab = "Precipitation", main = "Monthly Rainfall:September, 1946 to July, 2014")
 ```
 
 As we can see in the graph, the data is varied and the majority of the values fall between 0 and 10.  Since this graph is by year, we are missing visibility into how each particular month behaves.  No doubt this will be valuable information when we are attempting to predict future month's rain as it's probably safe to assume that we witness different precipitation totals in different months (ie April vs. October).  In order to do this, we will create a time series data set by month, and create a season plot to see if we can identify any monthly trends.
 
 ```{r}
-monthly_ts<- ts(comp_data_df$PRCP, frequency = 12, start = c(1946, 9))
+monthly_ts_all<- ts(comp_data_df$PRCP, frequency = 12, start = c(1946, 9))
 comp_data_12yr<- comp_data_df[671:815, c("Month", "Year", "PRCP")]
 monthly_ts_12yr<- ts(comp_data_12yr$PRCP, frequency = 12, start = c(2002, 7))
 ```
@@ -48,113 +48,71 @@ monthly_ts_12yr<- ts(comp_data_12yr$PRCP, frequency = 12, start = c(2002, 7))
 ```{r echo=FALSE}
 install.packages("forecast", repo="http://cran.us.r-project.org")
 library(forecast)
+```
+```{r}
 seasonplot(monthly_ts_12yr,ylab="Precipitation", xlab="Year", 
   main="Seasonal plot: Monthly Precipitation from July, 2002 to July, 2014", col=1:12)
 ```
 
-(We've limited the data set here so that the graph is readable)  Examining the graph, it does seem that there are some months with less rainfall than others.  For example, January and Februray don't have any values above ~ 5 inches of rainfall, while May - July (spring time) have some very high recordings of monthly precipitation.  The interesting observation here is that even though we witness more rainfall in the spring time, there is still a large variation of rainfall totals across each of the months.  For example, July has recorded precipitation near 0 inches and precipitation above 15.  Additionally, some years May has the highest precipitation and other years July or September have the highest recorded precipitation.  So there isn't a huge seasonal impact but there appears there might be some.
+(We've limited the data set here so that the graph is readable)  Examining the graph, it does seem that there are some months with less rainfall than others.  For example, January and Februray don't have any values above ~ 5 inches of rainfall, while May - July (spring time) have some very high recordings of monthly precipitation.  The interesting observation here is that even though we witness more rainfall in the spring time, there is still a large variation of rainfall totals across each of the months.  For example, July has recorded precipitation near 0 inches and precipitation above 15.  Additionally, some years May has the highest precipitation and other years July or September have the highest recorded precipitation.  So there isn't a huge seasonal impact but there appears there might be some. (Hyndman & Athanasopoulos, Section 2.1)
 
-```{r echo=FALSE}
+```{r}
 monthplot(monthly_ts_12yr,ylab="Precipitation",xlab="Year",xaxt="n",
   main="Seasonal deviation plot: Monthly Precipitation from July, 2002 to July, 2014")
 axis(1,at=1:12,labels=month.abb,cex=0.8)
 ```
 
-The above seasonal plot portrays the mean value across all years by month along the horizontal lines and the range of values on the vertial line.  Here we can see the same trend that overall there are some patterns by month as visualized by the mean, but there is still a large variation across any month.  
+The above seasonal plot portrays the mean value across all years by month along the horizontal lines and the range of values on the vertial line.  Here we can see the same trend that overall there are some patterns by month as visualized by the mean, but there is still a large variation across any month. (Hyndman & Athanasopoulos, Section 2.1) 
 
-Lastly, let's look at how the precipitation totals are distributed.  From a daily standpoint, we notice that we have quite a few 0 values. This of course makes sense because we don't get precipitation every day.
-
-```{r}
-precipDensity<- density(comp_data$PRCP)
-summary(comp_data$PRCP)
-```
-
-```{r echo=FALSE}
-plot(precipDensity)
-```
-
-The shape of this distribution is noticeably skewed because of the fact that we have so many 0 values.  Because of this we can attempt a log transformation to try and create a distribution that is less skewed.
+Let's examine the seasonal and trend components of the precipitation data.  We can use the decompose function in the forecast package.  This will split up the variaion in precipitation across a season effect, a trend effect, and a random effect.
 
 ```{r}
-comp_data$LOG<- log(comp_data$PRCP)
-precipLogDensity<- density(comp_data$LOG)
-summary(log(comp_data$PRCP))
-```
-
-```{r echo=FALSE}
-plot(precipLogDensity)
-```
-
-While this distribution has a better shape, we have so many 0 values which we cannot take the log of.  So in order to use a log transformation going forward, we will need to use our monthly aggregates.
-
-```{r}
-precipMonthDensity<- density(comp_data_df$PRCP)
-summary(comp_data_df$PRCP)
-```
-
-```{r echo=FALSE}
-plot(precipMonthDensity)
-```
-The monthly precipitation totals are distributed more normally becuase there are not a lot of months which have a total of 0 inches of precipitation.  However, we still do see a small amount of skewness.  Let's attempt to take the log of the monthly precipitation totals to see if we can get the dependent variable to become more normal.  However, before we take the log of these values, let's change the 0 values (7 months of the total dataset) to a 0.001 so that we can apply the log function to every month.  
-
-```{r}
-monthly_ts[monthly_ts==0] <- 0.08
-monthly_ts_log<- log(monthly_ts)
-precipLogMonthDensity<- density(monthly_ts_log)
-summary(monthly_ts_log)
-```
-
-```{r echo=FALSE}
-plot(precipLogMonthDensity)
-```
-
-Here we can see that the log transformation of the monthly totals have created a fairly normal distribution. We can use this distribution as well as the monthly total distribution when we are forecast to see if we can decrease the error rates.  
-
-Now we will use the data set to create some models to predict the next 24 months of precipitation totals.
-
-### Types of Models
-
-
-Type of Models:  What model classes did you build? Why?
-Literature:  FIVE examples from PEER REVIEWED JOURNALS of how the types of models you selected were used in similar situations.
-Formulation:  How did you formulate / implement you model in R?
-Performance / Accuracy: How did your models perform?
-Limitations:  What are the limitations of the model you designed?
-Future work: Where do you want to go with the model?
-Learning:  What did you learn in formulation the model?
-Read in Data, create year and month columns.  Aggreate by year and month.  
-
-
-Last 6 years.  Multiply per day averages by 30, create time series, remove seasonal effect
-```{r}
-comp_data_model_6yrs<- comp_data_df[743:815, c("Month", "Year", "PRCP")]
-comp_data_model_6yrs$PRCPNEW<- comp_data_model_6yrs$PRCP * 30
-monthly_ts<- ts(comp_data_model_6yrs$PRCPNEW, frequency = 12, start = c(2008, 7))
-monthly_ts
-plot.ts(monthly_ts)
-monthly_ts_dc<- decompose(monthly_ts)
+monthly_ts_dc<- decompose(monthly_ts_12yr)
 plot(monthly_ts_dc)
-monthlytsseasadj <- monthly_ts - monthly_ts_dc$seasonal
-plot(monthlytsseasadj)
 ```
 
-Create Holt Winters forecast.  Apply to next 24 months
+We notice a few things from this decomposition.  First that there appears to be a fairly sporadic but cyclical trend.  Generally, we notice a two year increase in trend then a two year decrease in trend.  Signalling that there appears to be some relationship with the precipiation totals and a two year cycle.  Next we notice, that there is clearly a seasonal trend per year.  Less precipitation in the beginning of the year, the most in the middle, and less at the end of the year. This analysis will be helpful as we chose a model to forecast precipitation.  Models that handle seasonality and trend should be favored.
+
+## Models
+
+The three types of model classes that we will build for this forecasting exercise are a multiple regression with season and trend, seasonal naive model, Holt-Winters model, and ARIMA model.  All of these models handle seasonality and trend so they should be fairly accurate when we evalue the predictions on a test set.  
+
+The multiple regression model uses the trend and seasonal effects that are found in the observations (Hyndman & Athanasopoulos, Section 5.1).  Much like a traditional multiple regression we are using predictor variables and attempting to predict the dependent, or the forecasted amount.  
+
+Next we use a seasonal naive model, which looks at the value that was observed in the same period but the last season (Hyndman & Athanasopoulos, Section 2.3).  
+
+After we have examined the multiple regression and seasonal naive models, we will then attempt a Holt Winters prediction.  The Holt Winters model using a forecasting equation with 3 smoothing equations.  One for the level, one for the trend, and one for the seasonal impact (Hyndman & Athanasopoulos, Section 7.5)
+
+Lastly, we will look at an ARIMA.  An ARIMA is an acronym for AutoRegressive Integrated Moving Average.  The combination of the autoregressive and moving average part of the model can be tuned to create the best forecasts.  (Hyndman & Athanasopoulos, Section 8.5)
+
+### Multiple Regression Model
+
+Using the tslm function in the forecast package we fit our model on the training datset which is all the data points in the time series except the last 24 and then forecast the next 24 points to compared to our test set.  The difference between the forecasted points and the test set will create the error which will we use to assess our model.
+
 ```{r}
-install.packages("forecast", repo="http://cran.us.r-project.org")
-library(forecast)
-forecasts<- HoltWinters(monthlytsseasadj, beta=FALSE, gamma=FALSE)
-forecasts$fitted
-plot(forecasts)
-forecasts$SSE
-next24months<- forecast.HoltWinters(forecasts, h=24)
-next24monthsres<- next24months$residuals
-next24monthsres<- na.trim(next24monthsres)
+train <- window(monthly_ts_all, start=c(1946, 9), end=c(2012, 7))
+test <- window(monthly_ts,start=c(2012, 8))
+mynorm <- rnorm(10000, mean=0, sd=1)
+mr_fit<- tslm(train ~ trend + season)
+
 ```
 
-Examine residuals and autocorrelation
+The following actuals and predictions are shown in the graph below:
+
 ```{r}
-acf(next24monthsres, lag.max = 20)
-plot.ts(next24monthsres)
+plot(train, xlab="Year", ylab="Monthly Precipitation", main="Monthly Precipitation: September, 1946 to July, 2012")
+lines(fitted(mr_fit), col=2)
+legend("topright", lty=1, col=c(1,2), legend = c("Actual", "Predicted"))
+```
+
+We can see that the predicted values are following the same pattern but does not have any of the spikes captured where the monthly precipitation values are very high.  Additionally, we notice that the trend of our predicted values is mostly flat but ever so slightly increasing.
+
+To assess if our multiple regression holds the assumptions of an ordinary least squares (OLS) regression, we can examine the residuals to see if they are normally distributed.  A normal distribution of residuals implies that we don't have any bias in our predictions based on some other factor.  For example, we aren't overpredicting all values that are in the month of October.  A simple histogram of the residuals with a normal distribution overlaid shows us that the residuals are behaving normally.
+
+```{r}
+mr_res<- mr_fit$residuals
+mr_res<- na.trim(mr_fit$residuals)
+acf(mr_res, lag.max = 20)
 
 plotForecastErrors <- function(forecasterrors)
   {
@@ -177,327 +135,299 @@ plotForecastErrors <- function(forecasterrors)
      myhist <- hist(mynorm, plot=FALSE, breaks=mybins)
      # plot the normal curve as a blue line on top of the histogram of forecast errors:
      points(myhist$mids, myhist$density, type="l", col="blue", lwd=2)
-  }
-plotForecastErrors(next24monthsres)
-plot.forecast(next24months)
-next24months
-```
+}
 
+plotForecastErrors(mr_res)
+qqplot(mynorm, mr_res, xlab = "Normal", ylab = "Multiple Regression Residuals", main = "QQ Plot of Multiple Regression Residuals")
 
-Holt Winters with Log transformation
-
-```{r}
-plot(comp_data)
-summary(comp_data$PRCP)
-precipDensity<- density(comp_data$PRCP)
-plot(precipDensity)
-comp_data$LOG<- log(comp_data$PRCP)
-precipLogDensity<- density(comp_data$LOG)
-plot(precipLogDensity)
-```
-
-```{r}
-comp_data_month_year_2<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), sum))
-df2<- data.frame(comp_data_month_year_2)
-comp_data_df_2<- setNames(df2, c("Month", "Year", "PRCP"))
-comp_data_df_2$LOG<- log(comp_data_df_2[,"PRCP"])
-```
-
-```{r}
-comp_data_model_6yrs_log<- comp_data_df_2[743:815, c("Month", "Year", "LOG")]
-comp_data_model_6yrs_log$PRCPNEW<- comp_data_model_6yrs_log$LOG
-monthly_ts_log<- ts(comp_data_model_6yrs_log$PRCPNEW, frequency = 12, start = c(2008, 7))
-monthly_ts_log
-plot.ts(monthly_ts_log)
-monthly_ts_log_dc<- decompose(monthly_ts_log)
-plot(monthly_ts_log_dc)
-monthlytsseasadj_log <- monthly_ts_log - monthly_ts_log_dc$seasonal
-plot(monthlytsseasadj_log)
-```
-
-Create Holt Winters forecast.  Apply to next 24 months
-```{r}
-forecasts_log<- HoltWinters(monthlytsseasadj_log, beta=FALSE, gamma=FALSE)
-forecasts_log$fitted
-plot(forecasts_log)
-forecasts_log$SSE
-next24months_log<- forecast.HoltWinters(forecasts_log, h=24)
-next24monthslog_res<- next24months_log$residuals
-next24monthslog_res<- na.trim(next24monthslog_res)
-```
-
-Examine residuals and autocorrelation
-```{r}
-acf(next24monthslog_res, lag.max = 20)
-plot.ts(next24monthslog_res)
-plotForecastErrors(next24monthslog_res)
-plot.forecast(next24months_log)
-```
-
-Get predictions
-```{r}
-next24months_log_pred<- exp(next24months_log$mean)
-next24months_log_pred
-```
-
-```{r}
-precip
-```
-Seasonal Naive
-```{r}
-comp_data_month_year<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), sum))
-df<- data.frame(comp_data_month_year)
-comp_data_df<- setNames(df, c("Month", "Year", "PRCP"))
-
-comp_data_model_12yrs<- comp_data_df[671:815, c("Month", "Year", "PRCP")]
-plot.ts(comp_data_model_12yrs$PRCP)
-monthly_ts_12year<- ts(comp_data_model_12yrs$PRCP, frequency = 12)
-snaivefit <- snaive(monthly_ts,h=24)
-
-plot(snaivefit, plot.conf=FALSE,
-  main="Forecasts for Monthly Precipitation")
-lines(snaivefit$mean,col=3)
+plot(mr_fit,
+  main="Forecast of Monthly Precipitation using Multiple Regression")
+lines(mr_fit$mean,col=3)
 legend("topright", lty=1, col=3,
-  legend=c("Seasonal naive method"))
+  legend=c("Multiple Regression"))
+```
 
+The residuals are mostly centered around zero, but the shape of the distribution isn't exactly symmetrical.  Examining the QQ plot we can see that we have some curvature in our plot which is indicated that the residuals are not exactly normally distributed.  When the residuals are not normally distributed, it brings is uncertainty when we are trying to predict using this function additional data points outside of our test set.  Additionaly, we plot the autocorrelation of the residuals to see if there is a correlation between successive predictions.  (Hyndman & Athanasopoulos, Section 2.2) If there is a relationship, then most likely the model can be improved upon.  The correlogram shows that there is minimal autocorrelation between the residuals and only one of the lagged values falls outside of the barrier.  Therefore, we say that we're doing a decent job with this model.
+
+Next we will forecast the next 24 points and see how they compare to our test dataset and measure the error.
+
+```{r}
+fcast <- forecast(mr_fit, h=24)
+plot(fcast, main="Forecast of Monthly Precipitation using Multiple Regression")
+lines(test, col = "green")
+legend("topright", lty=1, col = c("blue", "green"),
+       legend=c("Forecast","Test"))
+accuracy(fcast, test)
+```
+
+Again we see the same pattern as we did with the predictions in-sample, that they are not capturing the extremely high values.  They do however capture the trend, so we have modeled the relationship of the time series, just not the magnitude with respect to extreme values.
+
+Additionally, we can see that the Root Mean Squared Error (RMSE) is 2.417614.  This value will be used to compare all of the models that we build (Hyndman & Athanasopoulos, Section 2.6).  The root mean squared error takes square root of the mean of the squared residuals to determine the amount of error in the model with respect to the forecasted points and the test set.  
+
+Now let's fit the model to the entire dataset, not just the training set.  Then we can use that model to predict the next 24 months.  
+
+```{r}
+#Use entire dataset for predicions
+mrfit<- tslm(monthly_ts_all ~ trend + season)
+fcast <- forecast(mrfit, h=24)
+mr_pred<- fcast$mean
+mr_pred
+```
+
+The outputed point estimates are used as our predictions for the next 24 months.  If we select this model, these will be the values that we use for our submission.  Looking through the values, they are qualititatively the right values, so we confirm that the model is without syntax errors.  The model error will be calculated once the submission has been scored.
+
+### SEASONAL NAIVE MODEL
+
+The next model that we will chose to explore is a seasonal naive model.  A seasonal naive model uses the previous' seasons data points and applies that to the next season in the time period.  First we build the season naive model.
+
+```{r}
+snaivefit <- snaive(train,h=24)
+```
+
+Using the snaive function in the forecast package we fit our model on the same training datset declared above and forecast the next 24 points.  The following actuals and predictions are shown in the graph below
+
+```{r}
+plot(train, xlab="Year",ylab="Monthly Precipitation Totals", main="Monthly Precipitation: September, 1946 to July, 2012")
+lines(fitted(snaivefit), col=2)
+legend("topright", lty=1, col=c(1,2), legend = c("Actual", "Predicted"))
+```
+
+Here we see that the seasonal naive model does a great job of capture the wild values as opposed to the previous multiple regression model.  However, this model works well if the same patterns happen season over season and can be extremely detrimental when they don't.  For example a record high precipitation total in 2014 for May would produce an equally high prediction for 2015 when in fact it's probably unlikely to have another record the following year.
+
+To assess how well we fit this model, we can examine the residuals to see if they are normally distributed.  Again, a normal distribution of residuals implies that we don't have any bias in our predictions based on some other factor.  The histrogram of the residuals superimposed on a normal distribution allows us to see this relationship.
+
+```{r}
 snaive_res<- snaivefit$residuals
 snaive_res<- na.trim(snaivefit$residuals)
 plotForecastErrors(snaive_res)
-snaivefit$mean
-plot(snaivefit)
-#testing and training sets
-train.end <- time(monthly_ts)[length(monthly_ts)-24]
-test.start <- time(monthly_ts)[length(monthly_ts)-24+1]
-train <- window(monthly_ts,end=train.end)
-test <- window(monthly_ts,start=test.start)
-fitsnaive <- snaive(train, h=24)
-fcsnaive <- forecast(fitsnaive,h=24)
-accuracy(fcsnaive, test)
-plot(fcsnaive)
-lines(test, col=5)
+qqplot(mynorm, snaive_res, xlab = "Normal", ylab = "Seasonal Naive Residuals", main = "QQ Plot of Season Naive Residuals")
+
+acf(snaive_res, lag.max = 20)
 ```
 
-ARIMA
+The residuals are centered around 0, and the shape is in line with a normal distribution.  So the first residual test passes however we get a different story when we look at the autocorrelation of the residuals.  Here we see 6 lagged residuals that fall outside our bounds for autocorrelation, meaning that our consecutive residuals are in same way related to each other.  This is a sign that this model will not predict very well
+
 ```{r}
-install.packages("tseries", repo="http://cran.us.r-project.org")
-library("tseries")
-comp_data_month_year<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), sum))
-df<- data.frame(comp_data_month_year)
-comp_data_df<- setNames(df, c("Month", "Year", "PRCP"))
-
-comp_data_model_6yrs<- comp_data_df[743:815, c("Month", "Year", "PRCP")]
-comp_data_model_6yrs$PRCPNEW<- comp_data_model_6yrs$PRCP
-
-comp_data_model_all<- comp_data_df[, c("Month", "Year", "PRCP")]
-comp_data_model_all$PRCPNEW<- comp_data_model_all$PRCP
-
-monthly_ts<- ts(comp_data_model_all$PRCPNEW, frequency = 12, start = c(1946, 9))
-monthly_ts
-
-adf.test(monthly_ts, alternative = "stationary")
-
-
-tsdisplay(diff(monthly_ts,4))
-fit011 <- Arima(monthly_ts, order=c(0,1,1), seasonal=c(0,1,1))
-tsdisplay(residuals(fit011))
-
-fit013 <- Arima(monthly_ts, order=c(0,1,3), seasonal=c(0,1,1))
-tsdisplay(residuals(fit013))
-
-res011 <- residuals(fit011)
-res013 <- residuals(fit013)
-Box.test(res011, lag=16, fitdf=4, type="Ljung")
-Box.test(res013, lag=16, fitdf=4, type="Ljung")
-
-forecast011<- forecast(fit011, h=24)
-forecast013<- forecast(fit013, h=24)
-plot(forecast011)
-plot(forecast013)
-fitauto<- auto.arima(monthly_ts)
-tsdisplay(residuals(fitauto))
-resauto<- residuals(fitauto)
-Box.test((resauto))
-forecastauto<- forecast(fitauto, h=24)
-plot(forecastauto)
-fitauto
-fit013
-fit011
+plot(snaivefit, plot.conf=FALSE,
+  main="Forecast of Monthly Precipitation using Seasonal Naive")
+lines(test, col = "green")
+legend("topright", lty=1, col=c("blue", "green"),
+  legend=c("Seasonal naive method", "Test"))
 ```
 
-ARIMA with test and train datasets
+The forecasts are capturing the magnitude that we did not get with the multiple regression model, however since the residuals have so much autocorrelation, our predictions won't be as accurate.
+
 ```{r}
-getrmse <- function(x,h,...)
+accuracy(snaivefit, test)
+```
+
+As we thought, the RMSE for this model is substantially higher than the multiple regression model at 2.938719.  
+
+Last, we'll fit the model on the entire dataset and create our forecasts for the next 24 months.
+```{r}
+#Use entire dataset for predicions
+snaivefit<- snaive(monthly_ts_all, h = 24)
+snaive_pred<- snaivefit$mean
+snaive_pred
+```
+If we were to select this model we would use those values in our submission.  However, it is unlikely at this point that we would chose it given it's autocorrelation of residuals and it's higher RMSE.
+
+### HOLT WINTERS MODEL
+
+The holt winters model comprises the forecasting equation and using 3 components, the trend, season, and random effect.  In our case the seasons are monthly and the trend is the overall trend for the data set.  Decomposing this on a smaller dataset we can see how they are generated.
+
+```{r}
+
+monthly_ts_12yr<- ts(comp_data_df$PRCP, frequency = 12, start = c(2002, 7))
+
+monthly_ts_dc<- decompose(monthly_ts_12yr)
+plot(monthly_ts_dc)
+```
+
+From this decomposed graph we can see the trend is cyclical but not trending up or down in any meaninful fashion.  Additionally, we can witness a seasonal effect that appears to be looping every year for each motnh.  
+
+Using the same training and testing data sets, we can apply the Holt Winters model in the forecast package.  We do need to transform our 0 values as the model does not accept them.  So we will impute a small positive values for the 6 observations that are 0 for monthly precipitation totals.
+```{r}
+train[train==0] <- 0.001
+test[test==0] <- 0.001
+```
+
+In this Holt Winters model function there are a few parameters that we can adjust.  So rather than attempting to guess at which value we should chose, let's run all iterations of the modeling function and see which model produces the lowest RMSE on our test set.  Then we can choose that version of the Holt Winters model.
+
+```{r}
+getHW <- function(s, d) {
+  forecast <- hw(train, seasonal = s, damped = d, h = 24)
+  return(accuracy(forecast,test)[2,"RMSE"])
+}
+
+getHW("additive", TRUE)
+getHW("additive", FALSE)
+getHW("additive", TRUE)
+getHW("multiplicative", FALSE)
+```
+
+Here we can see that the model with the lowest RMSE is the model with an additive seasonal effect and a non dampened trend.  We will use this version of the model for our forecasts.  
+
+```{r}
+forecastsbest<- hw(train, seasonal = "additive", damped = FALSE, h = 24)
+plot(forecastsbest,ylab="Forecast of Monthly Precipitation using Holt Winters",
+     plot.conf=FALSE, type="o", fcol="white", xlab="Year")
+
+lines(forecastsbest$mean, type="o", col="blue")
+lines(test, type = "o", col = "green")
+legend("topright",lty=1, pch=1, col=c("blue", "green"), 
+  c("data","Holt Winters' Additive and Non Dampened Trend"))
+```
+
+Now that we have built our forecast for the test set, it's examine the residuals and see if they are normally distributed and if we are seeing any autocorrelation.
+
+```{r}
+hw_res<- forecastsbest$residuals
+plotForecastErrors(hw_res)
+qqplot(mynorm, hw_res, xlab = "Normal", ylab = "Holt Winters Residuals", main = "QQ Plot of Holt Winters Residuals")
+acf(hw_res, lag.max = 20)
+```
+
+Judging by the histrogram of residuals and the QQ plot, it appears that the residuals are essentially normal.  Additionally, the residuals are showing no autocorrelatoin outside the accepted bounds except for the lagged values at 1.6.  This is affirming the use of the model in it's current set up.
+
+Lastly, let's examine the error with respect to the test set.
+
+```{r}
+accuracy(forecastsbest, test)
+```
+
+Given the normality of residuals and no autocorrelation we find a small RMSE here at 2.394520.  This is the smalled RMSE that we have created so far.  Given these facts, this model is the most desirable so far.
+
+Next we will run the model on the entire dataset and get the predictions that will potentially be used in the submission.
+
+```{r}
+forecastsbest<- hw(monthly_ts_all, seasonal = "additive", damped = FALSE, h = 24)
+hw_pred<- forecastsbest$mean
+hw_pred
+```
+
+These are the predicted values using the Holt Winters model and are the most appealing thus far.
+
+### ARIMA
+
+The last model that we will explore is the ARIMA model.  The ARIMA is a combination of an autoregressive model and a moving average model. ARIMA model works best with stationary data or if it's not stationary, then we need to difference it.  First let's check to see if it's stationary or not by completing an Augmented Dickey-Fuller Test.
+
+```{r}
+install.packages("tseries",repo="http://cran.us.r-project.org")
+library(tseries)
+adf.test(train, alternative = "stationary")
+```
+
+
+Since the data is stationary, we do not need to transform it.  Since the ARIMA model has a variety of parameters, we can run througha variety of iterations in order to find the model that produces the lowest RMSE on our testing dataset and select that model for evaluation.
+
+```{r}
+getrmse <- function(h,...)
 {
-  train.end <- time(x)[length(x)-h]
-  test.start <- time(x)[length(x)-h+1]
-  train <- window(x,end=train.end)
-  test <- window(x,start=test.start)
   fit <- Arima(train,...)
   fc <- forecast(fit,h=h)
   return(accuracy(fc,test)[2,"RMSE"])
 }
 
-getrmse(monthly_ts,h=24,order=c(3,0,0),seasonal=c(2,1,0))
-getrmse(monthly_ts,h=24,order=c(3,0,1),seasonal=c(2,1,0))
-getrmse(monthly_ts,h=24,order=c(3,0,2),seasonal=c(2,1,0))
-getrmse(monthly_ts,h=24,order=c(3,0,1),seasonal=c(1,1,0))
-getrmse(monthly_ts,h=24,order=c(3,0,1),seasonal=c(0,1,1))
-getrmse(monthly_ts,h=24,order=c(3,0,1),seasonal=c(0,1,2))
-getrmse(monthly_ts,h=24,order=c(3,0,1),seasonal=c(1,1,1))
-getrmse(monthly_ts,h=24,order=c(4,0,3),seasonal=c(0,1,1))
-getrmse(monthly_ts,h=24,order=c(3,0,3),seasonal=c(0,1,1))
-getrmse(monthly_ts,h=24,order=c(4,0,2),seasonal=c(0,1,1))
-getrmse(monthly_ts,h=24,order=c(3,0,2),seasonal=c(0,1,1))
-getrmse(monthly_ts,h=24,order=c(2,1,3),seasonal=c(0,1,1))
-getrmse(monthly_ts,h=24,order=c(2,1,4),seasonal=c(0,1,1))
-getrmse(monthly_ts,h=24,order=c(2,1,5),seasonal=c(0,1,1))
+getrmse(h=24,order=c(3,0,0),seasonal=c(2,1,0))
+getrmse(h=24,order=c(3,0,1),seasonal=c(2,1,0))
+getrmse(h=24,order=c(3,0,2),seasonal=c(2,1,0))
+getrmse(h=24,order=c(3,0,1),seasonal=c(1,1,0))
+getrmse(h=24,order=c(3,0,1),seasonal=c(0,1,1))
+getrmse(h=24,order=c(3,0,1),seasonal=c(0,1,2))
+getrmse(h=24,order=c(3,0,1),seasonal=c(1,1,1))
+getrmse(h=24,order=c(4,0,3),seasonal=c(0,1,1))
+getrmse(h=24,order=c(3,0,3),seasonal=c(0,1,1))
+getrmse(h=24,order=c(4,0,2),seasonal=c(0,1,1))
+getrmse(h=24,order=c(3,0,2),seasonal=c(0,1,1))
+getrmse(h=24,order=c(2,1,3),seasonal=c(0,1,1))
+getrmse(h=24,order=c(2,1,4),seasonal=c(0,1,1))
+getrmse(h=24,order=c(2,1,5),seasonal=c(0,1,1))
+```
 
-getrmse(monthly_ts,h=24,order=c(4,0,3),seasonal=c(0,1,1))
+Iterating through all of the different model hyperparameters we select the model with the lowest RMSE on the test set.  In this case it is:
 
-train.end <- time(monthly_ts)[length(monthly_ts)-24]
-test.start <- time(monthly_ts)[length(monthly_ts)-24+1]
-train <- window(monthly_ts,end=train.end)
-test <- window(monthly_ts,start=test.start)
+getrmse(h=24,order=c(4,0,3),seasonal=c(0,1,1))
 
-fitbest<- Arima(train, order=c(4,0,3), seasonal=c(0,1,1))
-tsdisplay(residuals(fitbest))
-resbest<- residuals(fitbest)
-Box.test(resbest, lag=16, fitdf=4, type="Ljung")
+Using that model, we fit the model and evaluate the performance.
 
-forecastbest<- forecast(fitbest, h=24)
-plot(forecastbest)
-lines(test, col=5)
-test
+```{r}
+arima_fit<- Arima(train, order=c(4,0,3), seasonal=c(0,1,1))
+forecastbest<- forecast(arima_fit, h=24)
+plot(forecastbest, ylab = "Forecast of Monthly Precipitation using Arima")
+lines(test, type = "o", col = "green")
+legend("topright",lty=1, pch=1, col=c("blue", "green"), 
+  c("ARIMA [4,0,3], [0, 1, 1]", "TEST"))
+```
+
+As we've witnessed with the other models, the trend of the predictions is accurate, but the magnitude is not captured.  The prediction intervals fall below 0, which is obviously not possible.  So the predictions capture the essence of the graph but do not have a tight prediction window. 
+
+Examining the residuals we will see if the model is predicting well enough.
+
+```{r}
+tsdisplay(residuals(arima_fit))
+arima_res<- residuals(arima_fit)
+plotForecastErrors(arima_res)
+qqplot(mynorm, hw_res, xlab = "Normal", ylab = "ARIMA Residuals", main = "QQ Plot of ARIMA Residuals")
+```
+
+The residuals appear to be normally distributed and centered around zero.  The QQ plot shows a relatively normal distribution so we can be fairly confident in the predictions from this model.
+
+Lastly, examining the autocorrelation graphs we witness for the most part white noise, with only a few observations falling outside the threshold.  As a result, we can move on to forecasting the remaining points with our full dataset.  
+
+```{r}
 accuracy(forecastbest, test)
-
-#Get predictions
-fitbest<- Arima(monthly_ts, order=c(4,0,3), seasonal=c(0,1,1))
-forecastbest<- forecast(fitbest, h=24)
-plot(forecastbest)
-preds<-forecastbest$mean
-preds
 ```
 
-ARIMA with Log Transformation
+Generating the RMSE for the forecast given the test set (which we have already done, but replicating again.)  The RMSE = 2.392237 which is just ever so slightly lower than the Holt Winters model.  Both models appear to be useful and very close.
+
+Finally, we will fit the model with the full dataset and get the predictions for the next 24 months.
+
 ```{r}
-comp_data_month_year<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), sum))
-df<- data.frame(comp_data_month_year)
-comp_data_df<- setNames(df, c("Month", "Year", "PRCP"))
-
-comp_data_model_6yrs<- comp_data_df[743:815, c("Month", "Year", "PRCP")]
-comp_data_model_6yrs$PRCPNEW<- comp_data_model_6yrs$PRCP
-
-comp_data_model_all<- comp_data_df[, c("Month", "Year", "PRCP")]
-comp_data_model_all$PRCPNEW<- comp_data_model_all$PRCP
-
-monthly_ts<- ts(comp_data_model_all$PRCPNEW, frequency = 12, start = c(1946, 9))
-monthly_ts
-
-adf.test(monthly_ts, alternative = "stationary")
-
-
-tsdisplay(diff(monthly_ts,4))
-fit011 <- Arima(monthly_ts, order=c(0,1,1), seasonal=c(0,1,1))
-tsdisplay(residuals(fit011))
-
-fit013 <- Arima(monthly_ts, order=c(0,1,3), seasonal=c(0,1,1))
-tsdisplay(residuals(fit013))
-
-res011 <- residuals(fit011)
-res013 <- residuals(fit013)
-Box.test(res011, lag=16, fitdf=4, type="Ljung")
-Box.test(res013, lag=16, fitdf=4, type="Ljung")
-
-forecast011<- forecast(fit011, h=24)
-forecast013<- forecast(fit013, h=24)
-plot(forecast011)
-plot(forecast013)
-fitauto<- auto.arima(monthly_ts)
-tsdisplay(residuals(fitauto))
-resauto<- residuals(fitauto)
-Box.test((resauto))
-forecastauto<- forecast(fitauto, h=24)
-plot(forecastauto)
-fitauto
-fit013
-fit011
+arima_fit<- Arima(monthly_ts_all, order=c(4,0,3), seasonal=c(0,1,1))
+arima_fc<- forecast(arima_fit, h = 24)
+arima_preds<-arima_fc$mean
+arima_preds
 ```
 
-ARIMA with log transformations on test and train datasets
-```{r}
-comp_data_model_all<- comp_data_df[, c("Month", "Year", "PRCP")]
-comp_data_model_all$PRCPNEW<- comp_data_model_all$PRCP
+These ARIMA predictions or the Holt Winters predictions will be the final selected model based on the testing set in the submission forum.  
 
-comp_data_month_year<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), sum))
-df<- data.frame(comp_data_month_year)
-df
-comp_data_df<- setNames(df, c("Month", "Year", "PRCP"))
-summary(comp_data_df)
+Literature:  FIVE examples from PEER REVIEWED JOURNALS of how the types of models you selected were used in similar situations.
 
+#Literature 1
+[link] (http://facta.junis.ni.ac.rs/eao/eao201104/eao201104-09.pdf)
+In this paper, Lepojevic discusses using the holt winters method of forecasting energy consumption.  This is very similar to the rainfall prediction as they are both used for assessing how much resources are available.
 
-comp_data_model_f<- comp_data_df[is.finite(comp_data_df)]
-monthly_ts<- ts(comp_data_df$PRCP, frequency = 12, start = c(1946, 9))
+#Literature 2
+[link] (http://www.dtic.mil/dtic/tr/fulltext/u2/a473648.pdf)
+A study of healthcare forecasting needs.  Needs including staffing, purchasing, and healthcare delivery
 
-monthly_ts[monthly_ts==0] <- 0.001
-summary(monthly_ts)
+#Literature 3
+[link] (https://labs.omniti.com/people/jesus/papers/holtwinters.pdf)
+Example of forecasing using Holt Winters.  They explore the additive, multiplicative seasonality as well as dampened and undampened trend.
 
-monthly_ts_log<- log(monthly_ts)
+#Literature 4
+[link] (http://aje.oxfordjournals.org/content/163/2/181.short)
+Dushoff discusses using multiple regression for forecasting influenza rates in the United States
 
-plot(monthly_ts_log_f)
-summary(monthly_ts_log_f)
-
-getrmse <- function(x,h,...)
-{
-  train.end <- time(x)[length(x)-h]
-  test.start <- time(x)[length(x)-h+1]
-  train <- window(x,end=train.end)
-  test <- window(x,start=test.start)
-  fit <- Arima(train,...)
-  fc <- forecast(fit,h=h)
-  return(accuracy(fc,test)[2,"RMSE"])
-}
-
-getrmse(monthly_ts_log,h=24,order=c(3,0,0),seasonal=c(2,1,0))
-getrmse(monthly_ts_log,h=24,order=c(3,0,1),seasonal=c(2,1,0))
-getrmse(monthly_ts_log,h=24,order=c(3,0,2),seasonal=c(2,1,0))
-getrmse(monthly_ts_log,h=24,order=c(3,0,1),seasonal=c(1,1,0))
-getrmse(monthly_ts_log,h=24,order=c(3,0,1),seasonal=c(0,1,1))
-getrmse(monthly_ts_log,h=24,order=c(3,0,1),seasonal=c(0,1,2))
-getrmse(monthly_ts_log,h=24,order=c(3,0,1),seasonal=c(1,1,1))
-getrmse(monthly_ts_log,h=24,order=c(4,0,3),seasonal=c(0,1,1))
-getrmse(monthly_ts_log,h=24,order=c(3,0,3),seasonal=c(0,1,1))
-getrmse(monthly_ts_log,h=24,order=c(4,0,2),seasonal=c(0,1,1))
-getrmse(monthly_ts_log,h=24,order=c(3,0,2),seasonal=c(0,1,1))
-getrmse(monthly_ts_log,h=24,order=c(2,1,3),seasonal=c(0,1,1))
-getrmse(monthly_ts_log,h=24,order=c(2,1,4),seasonal=c(0,1,1))
-getrmse(monthly_ts_log,h=24,order=c(2,1,5),seasonal=c(0,1,1))
-
-getrmse(monthly_ts_log,h=24,order=c(3,0,1),seasonal=c(0,1,1))
-
-train.end <- time(monthly_ts_log)[length(monthly_ts_log)-24]
-test.start <- time(monthly_ts_log)[length(monthly_ts_log)-24+1]
-train <- window(monthly_ts_log,end=train.end)
-test <- window(monthly_ts_log,start=test.start)
-
-fitbestlog<- Arima(train, order=c(3,0,1),seasonal=c(0,1,1))
-tsdisplay(residuals(fitbestlog))
-resbestlog<- residuals(fitbestlog)
-Box.test(resbestlog, lag=16, fitdf=4, type="Ljung")
-
-forecastbestlog<- forecast(fitbestlog, h=24)
-preds<- forecastbestlog$mean
-lines(train[700:815])
-accuracy(forecastbestlog, test)
-
-#Get predictions
-fitbestlog<- Arima(monthly_ts_log_f, order=c(3,0,1),seasonal=c(0,1,1))
-forecastbestlog<- forecast(fitbestlog, h=24)
-forecastbestlog$mean
-plot(forecastbestlog)
-preds<- exp(forecastbestlog$mean)
-
-plot(monthly_ts)
-lines(preds, col=4)
+#Literature 5
+[link] (https://arxiv.org/pdf/1508.07534.pdf)
+The paper utilizes an ARIMA to forecast the exchange rates of multiple currencies.
 
 
-```
+## Limitations
+
+With any forecasting technique we are reliant on the historical data and that it in some way it will repeat the trend that it's shown in the past.  For the seasonal naive model, it's literally predicting the exact same point from the prior period.  So any fluxation from that point will cause a large forecasting error.  That methodology is very susceptible to extreme values.  The Holt Winters model and ARIMA model are in the same types of ways reliant on the previous data.  So for example, el nino created extreme weather conditions, any predictions going forward will undoubtedly include that el nino effect when in reality el nino is not as cyclical as the next prediction period.
+
+## Future Work
+
+As a next step for these models, I would love to see what techniques other members of the class used to create their forecasts.  Since this is my first exposure to forecasting, I would love to learn some of the "tricks of the trade" when createing reliable and accurate forecasts. Additionally, something that could be useful is to exclude rare weather patterns from the data sets (ie el nino) and see if the error rates come down.  Lastly, I think it could make sense to forecast daily precipitations instead of monthly and roll up the daily values to arrive at monthly predictions.  I wonder if some of the daily nuances will create a more accurate forecast.
+
+## Learning
+
+One of the more shocking things I learned throughout the course of this exercise was how similiar the results were across forecasting methods.  I plotted the forecasted values for each model and was surprised how similar they were.  Another thing I learned from reading the text and code examples in Forecasting: Principles and Practice book was how to create mutliple models to assess the error, rather than trying to just select what one would think would be the best model.  Tweaking the hyperparameters of the model and using the model with the least error was a quick and easy way to figure out which hyperparameters to use within the model function. 
+
+## Bibliography
+
+Hyndman, R. J., & Athanasopoulos, G. (n.d.). Forecasting: Principles and practice. Retrieved October 25, 2016, from https://www.otexts.org/fpp
+
