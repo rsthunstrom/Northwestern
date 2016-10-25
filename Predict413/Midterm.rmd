@@ -11,9 +11,111 @@ Given a set of daily rainfall data, the objective is to predict the next 24 mont
 
 ### Significance
 
-The problem is an interesting one has much of the world's production comes from rain water.  Farmers no doubt are very interested in monthly rainfall as it provides the fuel for their crops to grow.  Knowing what the precipitation will be is extremely significant and important for them as they need to supply the water themselves if the crops don't get enough water from the rainfall.  
+The problem is an interesting one has much of the world's production comes from rain water.  Farmers no doubt are very interested in monthly rainfall as it provides the fuel for their crops to grow.  Knowing what the precipitation will be is extremely significant and important for them as they need to supply the water themselves if the crops don't get enough water from the rainfall. Certain humans live on the supply of rainwater.  Having an accurate prediction of the upcoming rainwater totals is of paramount importance as the supply is vital to their existence.  Most likely, the exact amount of inches isn't critically important, but some reasonable estimate is no doubt critical for those that rely on the supply of rainwater.
 
-Data: From where did you obtain the data?  What type of data are they?
+### Data
+
+The data used in the problem is comprised of daily historical precipitation data that spans September, 1946 to July, 2014. The rainfall data is from an unknown location, so we are left with only the daily values without any context to create our predicion.  to The dataset is a simplistic one in that it is made up of two columns, the date, and a daily precipitation total.
+
+```{r}
+comp_data<- read.csv('/Users/z013nx1/documents/competitiondata.csv', header=TRUE ,sep = ",")
+head(comp_data)
+```
+
+The dataset is made up of 24,806 observations which can be aggregated into 815 months.  We will use these 815 monthly precipitation totals for our model building.  A plot of the monthly graph shows how sporadic the data is.
+
+```{r}
+comp_data$DATE<- as.Date(as.character(comp_data$DATE), "%Y%m%d")
+comp_data["Year"] <- as.numeric(substr(as.character(comp_data$DATE),1,4))
+comp_data["Month"] <- as.numeric(substr(as.character(comp_data$DATE),6,7))
+comp_data_month_year<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), sum))
+df<- data.frame(comp_data_month_year)
+comp_data_df<- setNames(df, c("Month", "Year", "PRCP"))
+```
+
+```{r echo=FALSE}
+plot(comp_data_df$Year, comp_data_df$PRCP, xlab = "Year", ylab = "Precipitation", main = "Monthly Rainfall:September, 1946 to July, 2014")
+```
+
+As we can see in the graph, the data is varied and the majority of the values fall between 0 and 10.  Since this graph is by year, we are missing visibility into how each particular month behaves.  No doubt this will be valuable information when we are attempting to predict future month's rain as it's probably safe to assume that we witness different precipitation totals in different months (ie April vs. October).  In order to do this, we will create a time series data set by month, and create a season plot to see if we can identify any monthly trends.
+
+```{r}
+monthly_ts<- ts(comp_data_df$PRCP, frequency = 12, start = c(1946, 9))
+comp_data_12yr<- comp_data_df[671:815, c("Month", "Year", "PRCP")]
+monthly_ts_12yr<- ts(comp_data_12yr$PRCP, frequency = 12, start = c(2002, 7))
+```
+
+```{r echo=FALSE}
+install.packages("forecast", repo="http://cran.us.r-project.org")
+library(forecast)
+seasonplot(monthly_ts_12yr,ylab="Precipitation", xlab="Year", 
+  main="Seasonal plot: Monthly Precipitation from July, 2002 to July, 2014", col=1:12)
+```
+
+(We've limited the data set here so that the graph is readable)  Examining the graph, it does seem that there are some months with less rainfall than others.  For example, January and Februray don't have any values above ~ 5 inches of rainfall, while May - July (spring time) have some very high recordings of monthly precipitation.  The interesting observation here is that even though we witness more rainfall in the spring time, there is still a large variation of rainfall totals across each of the months.  For example, July has recorded precipitation near 0 inches and precipitation above 15.  Additionally, some years May has the highest precipitation and other years July or September have the highest recorded precipitation.  So there isn't a huge seasonal impact but there appears there might be some.
+
+```{r echo=FALSE}
+monthplot(monthly_ts_12yr,ylab="Precipitation",xlab="Year",xaxt="n",
+  main="Seasonal deviation plot: Monthly Precipitation from July, 2002 to July, 2014")
+axis(1,at=1:12,labels=month.abb,cex=0.8)
+```
+---
+The above seasonal plot portrays the mean value across all years by month along the horizontal lines and the range of values on the vertial line.  Here we can see the same trend that overall there are some patterns by month as visualized by the mean, but there is still a large variation across any month.  
+---
+
+Lastly, let's look at how the precipitation totals are distributed.  From a daily standpoint, we notice that we have quite a few 0 values. This of course makes sense because we don't get precipitation every day.
+
+```{r}
+precipDensity<- density(comp_data$PRCP)
+summary(comp_data$PRCP)
+```
+
+```{r echo=FALSE}
+plot(precipDensity)
+```
+
+The shape of this distribution is noticeably skewed because of the fact that we have so many 0 values.  Because of this we can attempt a log transformation to try and create a distribution that is less skewed.
+
+```{r}
+comp_data$LOG<- log(comp_data$PRCP)
+precipLogDensity<- density(comp_data$LOG)
+summary(log(comp_data$PRCP))
+```
+
+```{r echo=FALSE}
+plot(precipLogDensity)
+```
+
+While this distribution has a better shape, we have so many 0 values which we cannot take the log of.  So in order to use a log transformation going forward, we will need to use our monthly aggregates.
+
+```{r}
+precipMonthDensity<- density(comp_data_df$PRCP)
+summary(comp_data_df$PRCP)
+```
+
+```{r echo=FALSE}
+plot(precipMonthDensity)
+```
+The monthly precipitation totals are distributed more normally becuase there are not a lot of months which have a total of 0 inches of precipitation.  However, we still do see a small amount of skewness.  Let's attempt to take the log of the monthly precipitation totals to see if we can get the dependent variable to become more normal.  However, before we take the log of these values, let's change the 0 values (7 months of the total dataset) to a 0.001 so that we can apply the log function to every month.  
+
+```{r}
+monthly_ts[monthly_ts==0] <- 0.08
+monthly_ts_log<- log(monthly_ts)
+precipLogMonthDensity<- density(monthly_ts_log)
+summary(monthly_ts_log)
+```
+
+```{r echo=FALSE}
+plot(precipLogMonthDensity)
+```
+
+Here we can see that the log transformation of the monthly totals have created a fairly normal distribution. We can use this distribution as well as the monthly total distribution when we are forecast to see if we can decrease the error rates.  
+
+Now we will use the data set to create some models to predict the next 24 months of precipitation totals.
+
+### Types of Models
+
+
 Type of Models:  What model classes did you build? Why?
 Literature:  FIVE examples from PEER REVIEWED JOURNALS of how the types of models you selected were used in similar situations.
 Formulation:  How did you formulate / implement you model in R?
@@ -22,16 +124,7 @@ Limitations:  What are the limitations of the model you designed?
 Future work: Where do you want to go with the model?
 Learning:  What did you learn in formulation the model?
 Read in Data, create year and month columns.  Aggreate by year and month.  
-```{r}
-comp_data<- read.csv('/Users/z013nx1/documents/competitiondata.csv', header=TRUE ,sep = ",")
-head(comp_data)
-comp_data$DATE<- as.Date(as.character(comp_data$DATE), "%Y%m%d")
-comp_data["Year"] <- as.numeric(substr(as.character(comp_data$DATE),1,4))
-comp_data["Month"] <- as.numeric(substr(as.character(comp_data$DATE),6,7))
-comp_data_month_year<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), mean))
-df<- data.frame(comp_data_month_year)
-comp_data_df<- setNames(df, c("Month", "Year", "PRCP"))
-```
+
 
 Last 6 years.  Multiply per day averages by 30, create time series, remove seasonal effect
 ```{r}
@@ -153,8 +246,6 @@ precip
 ```
 Seasonal Naive
 ```{r}
-
-
 comp_data_month_year<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), sum))
 df<- data.frame(comp_data_month_year)
 comp_data_df<- setNames(df, c("Month", "Year", "PRCP"))
