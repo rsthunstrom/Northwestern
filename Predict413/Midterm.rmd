@@ -247,6 +247,7 @@ plot(monthly_ts_dc)
 From this decomposed graph we can see the trend is cyclical but not trending up or down in any meaninful fashion.  Additionally, we can witness a seasonal effect that appears to be looping every year for each motnh.  
 
 Using the same training and testing data sets, we can apply the Holt Winters model in the forecast package.  We do need to transform our 0 values as the model does not accept them.  So we will impute a small positive values for the 6 observations that are 0 for monthly precipitation totals.
+
 ```{r}
 train[train==0] <- 0.001
 test[test==0] <- 0.001
@@ -310,7 +311,7 @@ These are the predicted values using the Holt Winters model and are the most app
 
 ### ARIMA
 
-The last model that we will explore is the ARIMA model.  The ARIMA is a combination of an autoregressive model and a moving average model. ARIMA model works best with stationary data or if it's not stationary, then we need to difference it.  First let's check to see if it's stationary or not by completing an Augmented Dickey-Fuller Test.
+The last model that we will explore is the ARIMA model.  The ARIMA is a combination of an autoregressive model and a moving average model. ARIMA model works best with stationary data or if it's not stationary, then we need to difference it.  First let's check to see if it's stationary or not by completing an Augmented Dickey-Fuller Test. (Hyndman & Athanasopoulos, Section 8.5)
 
 ```{r}
 install.packages("tseries",repo="http://cran.us.r-project.org")
@@ -421,7 +422,7 @@ With any forecasting technique we are reliant on the historical data and that it
 
 ## Future Work
 
-As a next step for these models, I would love to see what techniques other members of the class used to create their forecasts.  Since this is my first exposure to forecasting, I would love to learn some of the "tricks of the trade" when createing reliable and accurate forecasts. Additionally, something that could be useful is to exclude rare weather patterns from the data sets (ie el nino) and see if the error rates come down.  Lastly, I think it could make sense to forecast daily precipitations instead of monthly and roll up the daily values to arrive at monthly predictions.  I wonder if some of the daily nuances will create a more accurate forecast.
+As a next step for these models, I would love to see what techniques other members of the class used to create their forecasts.  Since this is my first exposure to forecasting, I would love to learn some of the "tricks of the trade" when createing reliable and accurate forecasts. Additionally, something that could be useful is to exclude rare weather patterns from the data sets (ie el nino) and see if the error rates come down.  Also, I think it could make sense to forecast daily precipitations instead of monthly and roll up the daily values to arrive at monthly predictions.  I wonder if some of the daily nuances will create a more accurate forecast.  I would also like to explore using a box cox transformation with the regression model to see how the transformed model compares to the non transformed data.  
 
 ## Learning
 
