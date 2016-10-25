@@ -1,0 +1,413 @@
+---
+title: "Midterm"
+subtitle: "Predict 413 | Section 59"
+author: "Reed Thunstrom"
+output: html_document
+---
+
+### Problem
+
+Given a set of daily rainfall data, the objective is to predict the next 24 months of precipitation.  The rainfall data is vast, with approximately 66 years of historical data.  These 66 years of daily rainfall data will be used to predicted the next 24 months of rainfall.
+
+### Significance
+
+The problem is an interesting one has much of the world's production comes from rain water.  Farmers no doubt are very interested in monthly rainfall as it provides the fuel for their crops to grow.  Knowing what the precipitation will be is extremely significant and important for them as they need to supply the water themselves if the crops don't get enough water from the rainfall.  
+
+Data: From where did you obtain the data?  What type of data are they?
+Type of Models:  What model classes did you build? Why?
+Literature:  FIVE examples from PEER REVIEWED JOURNALS of how the types of models you selected were used in similar situations.
+Formulation:  How did you formulate / implement you model in R?
+Performance / Accuracy: How did your models perform?
+Limitations:  What are the limitations of the model you designed?
+Future work: Where do you want to go with the model?
+Learning:  What did you learn in formulation the model?
+Read in Data, create year and month columns.  Aggreate by year and month.  
+```{r}
+comp_data<- read.csv('/Users/z013nx1/documents/competitiondata.csv', header=TRUE ,sep = ",")
+head(comp_data)
+comp_data$DATE<- as.Date(as.character(comp_data$DATE), "%Y%m%d")
+comp_data["Year"] <- as.numeric(substr(as.character(comp_data$DATE),1,4))
+comp_data["Month"] <- as.numeric(substr(as.character(comp_data$DATE),6,7))
+comp_data_month_year<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), mean))
+df<- data.frame(comp_data_month_year)
+comp_data_df<- setNames(df, c("Month", "Year", "PRCP"))
+```
+
+Last 6 years.  Multiply per day averages by 30, create time series, remove seasonal effect
+```{r}
+comp_data_model_6yrs<- comp_data_df[743:815, c("Month", "Year", "PRCP")]
+comp_data_model_6yrs$PRCPNEW<- comp_data_model_6yrs$PRCP * 30
+monthly_ts<- ts(comp_data_model_6yrs$PRCPNEW, frequency = 12, start = c(2008, 7))
+monthly_ts
+plot.ts(monthly_ts)
+monthly_ts_dc<- decompose(monthly_ts)
+plot(monthly_ts_dc)
+monthlytsseasadj <- monthly_ts - monthly_ts_dc$seasonal
+plot(monthlytsseasadj)
+```
+
+Create Holt Winters forecast.  Apply to next 24 months
+```{r}
+install.packages("forecast", repo="http://cran.us.r-project.org")
+library(forecast)
+forecasts<- HoltWinters(monthlytsseasadj, beta=FALSE, gamma=FALSE)
+forecasts$fitted
+plot(forecasts)
+forecasts$SSE
+next24months<- forecast.HoltWinters(forecasts, h=24)
+next24monthsres<- next24months$residuals
+next24monthsres<- na.trim(next24monthsres)
+```
+
+Examine residuals and autocorrelation
+```{r}
+acf(next24monthsres, lag.max = 20)
+plot.ts(next24monthsres)
+
+plotForecastErrors <- function(forecasterrors)
+  {
+     # make a histogram of the forecast errors:
+     mybinsize <- IQR(forecasterrors)/4
+     mysd   <- sd(forecasterrors)
+     mymin  <- min(forecasterrors) - mysd*5
+     mymax  <- max(forecasterrors) + mysd*3
+     # generate normally distributed data with mean 0 and standard deviation mysd
+     mynorm <- rnorm(10000, mean=0, sd=mysd)
+     mymin2 <- min(mynorm)
+     mymax2 <- max(mynorm)
+     if (mymin2 < mymin) { mymin <- mymin2 }
+     if (mymax2 > mymax) { mymax <- mymax2 }
+     # make a red histogram of the forecast errors, with the normally distributed data overlaid:
+     mybins <- seq(mymin, mymax, mybinsize)
+     hist(forecasterrors, col="red", freq=FALSE, breaks=mybins)
+     # freq=FALSE ensures the area under the histogram = 1
+     # generate normally distributed data with mean 0 and standard deviation mysd
+     myhist <- hist(mynorm, plot=FALSE, breaks=mybins)
+     # plot the normal curve as a blue line on top of the histogram of forecast errors:
+     points(myhist$mids, myhist$density, type="l", col="blue", lwd=2)
+  }
+plotForecastErrors(next24monthsres)
+plot.forecast(next24months)
+next24months
+```
+
+
+Holt Winters with Log transformation
+
+```{r}
+plot(comp_data)
+summary(comp_data$PRCP)
+precipDensity<- density(comp_data$PRCP)
+plot(precipDensity)
+comp_data$LOG<- log(comp_data$PRCP)
+precipLogDensity<- density(comp_data$LOG)
+plot(precipLogDensity)
+```
+
+```{r}
+comp_data_month_year_2<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), sum))
+df2<- data.frame(comp_data_month_year_2)
+comp_data_df_2<- setNames(df2, c("Month", "Year", "PRCP"))
+comp_data_df_2$LOG<- log(comp_data_df_2[,"PRCP"])
+```
+
+```{r}
+comp_data_model_6yrs_log<- comp_data_df_2[743:815, c("Month", "Year", "LOG")]
+comp_data_model_6yrs_log$PRCPNEW<- comp_data_model_6yrs_log$LOG
+monthly_ts_log<- ts(comp_data_model_6yrs_log$PRCPNEW, frequency = 12, start = c(2008, 7))
+monthly_ts_log
+plot.ts(monthly_ts_log)
+monthly_ts_log_dc<- decompose(monthly_ts_log)
+plot(monthly_ts_log_dc)
+monthlytsseasadj_log <- monthly_ts_log - monthly_ts_log_dc$seasonal
+plot(monthlytsseasadj_log)
+```
+
+Create Holt Winters forecast.  Apply to next 24 months
+```{r}
+forecasts_log<- HoltWinters(monthlytsseasadj_log, beta=FALSE, gamma=FALSE)
+forecasts_log$fitted
+plot(forecasts_log)
+forecasts_log$SSE
+next24months_log<- forecast.HoltWinters(forecasts_log, h=24)
+next24monthslog_res<- next24months_log$residuals
+next24monthslog_res<- na.trim(next24monthslog_res)
+```
+
+Examine residuals and autocorrelation
+```{r}
+acf(next24monthslog_res, lag.max = 20)
+plot.ts(next24monthslog_res)
+plotForecastErrors(next24monthslog_res)
+plot.forecast(next24months_log)
+```
+
+Get predictions
+```{r}
+next24months_log_pred<- exp(next24months_log$mean)
+next24months_log_pred
+```
+
+```{r}
+precip
+```
+Seasonal Naive
+```{r}
+
+
+comp_data_month_year<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), sum))
+df<- data.frame(comp_data_month_year)
+comp_data_df<- setNames(df, c("Month", "Year", "PRCP"))
+
+comp_data_model_12yrs<- comp_data_df[671:815, c("Month", "Year", "PRCP")]
+plot.ts(comp_data_model_12yrs$PRCP)
+monthly_ts_12year<- ts(comp_data_model_12yrs$PRCP, frequency = 12)
+snaivefit <- snaive(monthly_ts,h=24)
+
+plot(snaivefit, plot.conf=FALSE,
+  main="Forecasts for Monthly Precipitation")
+lines(snaivefit$mean,col=3)
+legend("topright", lty=1, col=3,
+  legend=c("Seasonal naive method"))
+
+snaive_res<- snaivefit$residuals
+snaive_res<- na.trim(snaivefit$residuals)
+plotForecastErrors(snaive_res)
+snaivefit$mean
+plot(snaivefit)
+#testing and training sets
+train.end <- time(monthly_ts)[length(monthly_ts)-24]
+test.start <- time(monthly_ts)[length(monthly_ts)-24+1]
+train <- window(monthly_ts,end=train.end)
+test <- window(monthly_ts,start=test.start)
+fitsnaive <- snaive(train, h=24)
+fcsnaive <- forecast(fitsnaive,h=24)
+accuracy(fcsnaive, test)
+plot(fcsnaive)
+lines(test, col=5)
+```
+
+ARIMA
+```{r}
+install.packages("tseries", repo="http://cran.us.r-project.org")
+library("tseries")
+comp_data_month_year<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), sum))
+df<- data.frame(comp_data_month_year)
+comp_data_df<- setNames(df, c("Month", "Year", "PRCP"))
+
+comp_data_model_6yrs<- comp_data_df[743:815, c("Month", "Year", "PRCP")]
+comp_data_model_6yrs$PRCPNEW<- comp_data_model_6yrs$PRCP
+
+comp_data_model_all<- comp_data_df[, c("Month", "Year", "PRCP")]
+comp_data_model_all$PRCPNEW<- comp_data_model_all$PRCP
+
+monthly_ts<- ts(comp_data_model_all$PRCPNEW, frequency = 12, start = c(1946, 9))
+monthly_ts
+
+adf.test(monthly_ts, alternative = "stationary")
+
+
+tsdisplay(diff(monthly_ts,4))
+fit011 <- Arima(monthly_ts, order=c(0,1,1), seasonal=c(0,1,1))
+tsdisplay(residuals(fit011))
+
+fit013 <- Arima(monthly_ts, order=c(0,1,3), seasonal=c(0,1,1))
+tsdisplay(residuals(fit013))
+
+res011 <- residuals(fit011)
+res013 <- residuals(fit013)
+Box.test(res011, lag=16, fitdf=4, type="Ljung")
+Box.test(res013, lag=16, fitdf=4, type="Ljung")
+
+forecast011<- forecast(fit011, h=24)
+forecast013<- forecast(fit013, h=24)
+plot(forecast011)
+plot(forecast013)
+fitauto<- auto.arima(monthly_ts)
+tsdisplay(residuals(fitauto))
+resauto<- residuals(fitauto)
+Box.test((resauto))
+forecastauto<- forecast(fitauto, h=24)
+plot(forecastauto)
+fitauto
+fit013
+fit011
+```
+
+ARIMA with test and train datasets
+```{r}
+getrmse <- function(x,h,...)
+{
+  train.end <- time(x)[length(x)-h]
+  test.start <- time(x)[length(x)-h+1]
+  train <- window(x,end=train.end)
+  test <- window(x,start=test.start)
+  fit <- Arima(train,...)
+  fc <- forecast(fit,h=h)
+  return(accuracy(fc,test)[2,"RMSE"])
+}
+
+getrmse(monthly_ts,h=24,order=c(3,0,0),seasonal=c(2,1,0))
+getrmse(monthly_ts,h=24,order=c(3,0,1),seasonal=c(2,1,0))
+getrmse(monthly_ts,h=24,order=c(3,0,2),seasonal=c(2,1,0))
+getrmse(monthly_ts,h=24,order=c(3,0,1),seasonal=c(1,1,0))
+getrmse(monthly_ts,h=24,order=c(3,0,1),seasonal=c(0,1,1))
+getrmse(monthly_ts,h=24,order=c(3,0,1),seasonal=c(0,1,2))
+getrmse(monthly_ts,h=24,order=c(3,0,1),seasonal=c(1,1,1))
+getrmse(monthly_ts,h=24,order=c(4,0,3),seasonal=c(0,1,1))
+getrmse(monthly_ts,h=24,order=c(3,0,3),seasonal=c(0,1,1))
+getrmse(monthly_ts,h=24,order=c(4,0,2),seasonal=c(0,1,1))
+getrmse(monthly_ts,h=24,order=c(3,0,2),seasonal=c(0,1,1))
+getrmse(monthly_ts,h=24,order=c(2,1,3),seasonal=c(0,1,1))
+getrmse(monthly_ts,h=24,order=c(2,1,4),seasonal=c(0,1,1))
+getrmse(monthly_ts,h=24,order=c(2,1,5),seasonal=c(0,1,1))
+
+getrmse(monthly_ts,h=24,order=c(4,0,3),seasonal=c(0,1,1))
+
+train.end <- time(monthly_ts)[length(monthly_ts)-24]
+test.start <- time(monthly_ts)[length(monthly_ts)-24+1]
+train <- window(monthly_ts,end=train.end)
+test <- window(monthly_ts,start=test.start)
+
+fitbest<- Arima(train, order=c(4,0,3), seasonal=c(0,1,1))
+tsdisplay(residuals(fitbest))
+resbest<- residuals(fitbest)
+Box.test(resbest, lag=16, fitdf=4, type="Ljung")
+
+forecastbest<- forecast(fitbest, h=24)
+plot(forecastbest)
+lines(test, col=5)
+test
+accuracy(forecastbest, test)
+
+#Get predictions
+fitbest<- Arima(monthly_ts, order=c(4,0,3), seasonal=c(0,1,1))
+forecastbest<- forecast(fitbest, h=24)
+plot(forecastbest)
+preds<-forecastbest$mean
+preds
+```
+
+ARIMA with Log Transformation
+```{r}
+comp_data_month_year<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), sum))
+df<- data.frame(comp_data_month_year)
+comp_data_df<- setNames(df, c("Month", "Year", "PRCP"))
+
+comp_data_model_6yrs<- comp_data_df[743:815, c("Month", "Year", "PRCP")]
+comp_data_model_6yrs$PRCPNEW<- comp_data_model_6yrs$PRCP
+
+comp_data_model_all<- comp_data_df[, c("Month", "Year", "PRCP")]
+comp_data_model_all$PRCPNEW<- comp_data_model_all$PRCP
+
+monthly_ts<- ts(comp_data_model_all$PRCPNEW, frequency = 12, start = c(1946, 9))
+monthly_ts
+
+adf.test(monthly_ts, alternative = "stationary")
+
+
+tsdisplay(diff(monthly_ts,4))
+fit011 <- Arima(monthly_ts, order=c(0,1,1), seasonal=c(0,1,1))
+tsdisplay(residuals(fit011))
+
+fit013 <- Arima(monthly_ts, order=c(0,1,3), seasonal=c(0,1,1))
+tsdisplay(residuals(fit013))
+
+res011 <- residuals(fit011)
+res013 <- residuals(fit013)
+Box.test(res011, lag=16, fitdf=4, type="Ljung")
+Box.test(res013, lag=16, fitdf=4, type="Ljung")
+
+forecast011<- forecast(fit011, h=24)
+forecast013<- forecast(fit013, h=24)
+plot(forecast011)
+plot(forecast013)
+fitauto<- auto.arima(monthly_ts)
+tsdisplay(residuals(fitauto))
+resauto<- residuals(fitauto)
+Box.test((resauto))
+forecastauto<- forecast(fitauto, h=24)
+plot(forecastauto)
+fitauto
+fit013
+fit011
+```
+
+ARIMA with log transformations on test and train datasets
+```{r}
+comp_data_model_all<- comp_data_df[, c("Month", "Year", "PRCP")]
+comp_data_model_all$PRCPNEW<- comp_data_model_all$PRCP
+
+comp_data_month_year<- (aggregate(comp_data[,'PRCP'], list(comp_data$Month, comp_data$Year), sum))
+df<- data.frame(comp_data_month_year)
+df
+comp_data_df<- setNames(df, c("Month", "Year", "PRCP"))
+summary(comp_data_df)
+
+
+comp_data_model_f<- comp_data_df[is.finite(comp_data_df)]
+monthly_ts<- ts(comp_data_df$PRCP, frequency = 12, start = c(1946, 9))
+
+monthly_ts[monthly_ts==0] <- 0.001
+summary(monthly_ts)
+
+monthly_ts_log<- log(monthly_ts)
+
+plot(monthly_ts_log_f)
+summary(monthly_ts_log_f)
+
+getrmse <- function(x,h,...)
+{
+  train.end <- time(x)[length(x)-h]
+  test.start <- time(x)[length(x)-h+1]
+  train <- window(x,end=train.end)
+  test <- window(x,start=test.start)
+  fit <- Arima(train,...)
+  fc <- forecast(fit,h=h)
+  return(accuracy(fc,test)[2,"RMSE"])
+}
+
+getrmse(monthly_ts_log,h=24,order=c(3,0,0),seasonal=c(2,1,0))
+getrmse(monthly_ts_log,h=24,order=c(3,0,1),seasonal=c(2,1,0))
+getrmse(monthly_ts_log,h=24,order=c(3,0,2),seasonal=c(2,1,0))
+getrmse(monthly_ts_log,h=24,order=c(3,0,1),seasonal=c(1,1,0))
+getrmse(monthly_ts_log,h=24,order=c(3,0,1),seasonal=c(0,1,1))
+getrmse(monthly_ts_log,h=24,order=c(3,0,1),seasonal=c(0,1,2))
+getrmse(monthly_ts_log,h=24,order=c(3,0,1),seasonal=c(1,1,1))
+getrmse(monthly_ts_log,h=24,order=c(4,0,3),seasonal=c(0,1,1))
+getrmse(monthly_ts_log,h=24,order=c(3,0,3),seasonal=c(0,1,1))
+getrmse(monthly_ts_log,h=24,order=c(4,0,2),seasonal=c(0,1,1))
+getrmse(monthly_ts_log,h=24,order=c(3,0,2),seasonal=c(0,1,1))
+getrmse(monthly_ts_log,h=24,order=c(2,1,3),seasonal=c(0,1,1))
+getrmse(monthly_ts_log,h=24,order=c(2,1,4),seasonal=c(0,1,1))
+getrmse(monthly_ts_log,h=24,order=c(2,1,5),seasonal=c(0,1,1))
+
+getrmse(monthly_ts_log,h=24,order=c(3,0,1),seasonal=c(0,1,1))
+
+train.end <- time(monthly_ts_log)[length(monthly_ts_log)-24]
+test.start <- time(monthly_ts_log)[length(monthly_ts_log)-24+1]
+train <- window(monthly_ts_log,end=train.end)
+test <- window(monthly_ts_log,start=test.start)
+
+fitbestlog<- Arima(train, order=c(3,0,1),seasonal=c(0,1,1))
+tsdisplay(residuals(fitbestlog))
+resbestlog<- residuals(fitbestlog)
+Box.test(resbestlog, lag=16, fitdf=4, type="Ljung")
+
+forecastbestlog<- forecast(fitbestlog, h=24)
+preds<- forecastbestlog$mean
+lines(train[700:815])
+accuracy(forecastbestlog, test)
+
+#Get predictions
+fitbestlog<- Arima(monthly_ts_log_f, order=c(3,0,1),seasonal=c(0,1,1))
+forecastbestlog<- forecast(fitbestlog, h=24)
+forecastbestlog$mean
+plot(forecastbestlog)
+preds<- exp(forecastbestlog$mean)
+
+plot(monthly_ts)
+lines(preds, col=4)
+
+
+```
