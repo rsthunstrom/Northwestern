@@ -1,0 +1,1115 @@
+---
+title: "Final"
+author: "Reed Thunstrom"
+subtitle: "Predict 413 | Section 59"
+output: word_document
+---
+### Problem
+ 
+Given a set of housing data from Ames, Iowa, the goal is to predict the sale prices of homes in that area.  The data is made up of an extensive amount of features, and the goal of this project is to predict the sale price with regards to the time sold and any other pertinent predicting features. 
+ 
+### Significance
+ 
+The problem is a significant one for many obvious reasons.  Home purchases are one of the biggest purchases a family can make, so having an accurate valuation is important at the microeconomic levels for an individual household.  Additionally, housing prices can have macroeconomics effects on stocks and interest rates, so having insight into these valuations can be helpful to governing bodies and investors alike. 
+ 
+### Data
+ 
+As you would expect, the data used for this problem is comprised of a variety of home related features.  Features that span the price of the home, the amount of bedrooms, and the overall square feet. 
+ 
+```{r}
+
+train<- read.csv('/Users/z013nx1/Documents/trainkaggle.csv', header=TRUE, stringsAsFactors = T)
+str(train)
+ 
+```
+ 
+Further examining the data, we see that there are 1,460 observations in the dataset that is to be used for training the model.  These 1,460 observations have 81 features or columns associated with them.  These features are a mixture of numeric and categorical variables.  The variable that we are interested in modeling is SalePrice and it is the sale price of the home.  Let's further examine sale price.
+ 
+```{r}
+
+install.packages("psych")
+library(psych)
+describe(train$SalePrice)
+ 
+hist(train$SalePrice, xaxt = "n", main = "Histrogram of Sale Price", xlab = "Sale Price - $")
+marks<- c(0, 100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000)
+xticks<- format(marks, scientific = FALSE)
+axis(1, at=xticks, labels=xticks)
+grid()
+
+```
+ 
+The sale price of homes in Ames, IA ranges from $34,900 all the way to $755,000.  The mean value is ~$181,000 and the median is $163,000.  The difference in the mean and the median suggest to us that the data is skewed and by observing the skewness value of 1.88 we confirm the hypothesis.  A potential transformation for this variable would be to log transform it so it behaves more normally.  This normal behavior will produce better estimates when we are modeling.  Transforming with log we visualize the following histogram.
+ 
+```{r}
+
+describe(log(train$SalePrice))
+hist(log(train$SalePrice), main = "Histogram of Log Sale Price", xlab = "Log(Sale Price - $)")
+grid()
+ 
+mynorm <- rnorm(10000, mean=0, sd=1)
+qqplot(mynorm, log(train$SalePrice), xlab = "Normal", ylab = "Log(Sale Price - $)", main = "QQ Plot of Log(Sale Price)")
+
+```
+ 
+After transforming the sale price with a log, the distribution is much more normal.  The skewness drops from 1.88 to 0.12.  Additionally, the histogram and qq plot confirms this.
+ 
+Additionaly, we can use a box plot as an additional visual to confirm that using the log transformed value of sale price produce a better distribution.
+ 
+```{r}
+
+boxplot(log(train$SalePrice), main = "Box Plot of Log(Sale Price)")
+boxplot(train$SalePrice, main = "Box Plot Sale Price")
+
+```
+ 
+One thing we notice with both box plots is that there are some observations that are falling outside of the whiskers of the box and whisker plot.  Potentially these could be outliers.  According to the documentation included in the project description, there are 4 outliers and they can be found by looking at homes with square footage greater than 4,000.  Let's plot that against Sale Price and see if this is the case.
+ 
+```{r}
+
+#adding total SF to dataset
+train$TotalSquareFeet = train$X1stFlrSF + train$X2ndFlrSF
+ 
+#Plotting square footage against sale price
+plot(train$SalePrice, train$TotalSquareFeet, main = "Total Above Ground SF vs. Sale Price", xaxt = "n", xlab = "Sale Price - $")
+marks<- c(0, 100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000)
+xticks<- format(marks, scientific = FALSE)
+axis(1, at=xticks, labels=xticks)
+abline(h=4000, col = "red")
+grid()
+
+```
+ 
+As promised, we can see that the 4 observations with total square footage above 4,000 appear to be outliers.  Or better said, the two observations with sale prices less than $200,000 appear to have a different relationship with sale price; while the other two appear to exhibit the same relationship but just are located away from the rest of the observations.  For simplicity, we will exclude all 4.
+ 
+```{r}
+
+#removing 4 observations with SF > 4000
+train<- subset(train, train$TotalSquareFeet < 4000)
+plot(train$SalePrice, train$TotalSquareFeet, main = "Total Above Ground SF vs. Sale Price", xaxt = "n", xlab = "Sale Price - $")
+marks<- c(0, 100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000)
+xticks<- format(marks, scientific = FALSE)
+axis(1, at=xticks, labels=xticks)
+grid()
+ 
+#Removing total SF from datset
+train<- train[, c(-82)]
+
+```
+ 
+The above plot verifies that we have indeed removed the 4 outliers.  The visual here is a nice representation of the data and shows the linear relationship between square footage and sale price.  Of course, this make sense as houses sell for more as their size increase, especially when it's in the context of one market as it is this case with this dataset.  We will definitely want to include this as a potential variable in our ensuing models.
+ 
+Now let's start to dive into some exploratory data analysis for the features included in the dataset.  First we will create two groups of variables, categorical and numeric.  This will help us create meaningful visuals. 
+ 
+```{r}
+
+install.packages("corrplot", repo="http://cran.us.r-project.org")
+install.packages("ggplot2", repo="http://cran.us.r-project.org")
+install.packages("gridExtra", repo="http://cran.us.r-project.org")
+library(corrplot)
+library(ggplot2)
+library(gridExtra)
+ 
+#Identifying categorical features
+cat_var <- which(sapply(train, is.factor))
+ 
+#Identifying numerical features
+numeric_var <- which(sapply(train, is.numeric))
+ 
+#Grabbing data with categorical features
+train_cat <- train[,cat_var]
+ 
+#Grabbing data with numerical features
+train_cont <- train[,numeric_var]
+
+```
+ 
+Now that we have the two perspectives of our features, let's plot the categorical variables with box plots and the numeric ones with density plots. Below is a function that creates both histograms and density plots.  This was taked from a kernel on the kaggle site produced by "AiO" [Exploratory Data Analysis using r] (https://www.kaggle.com/notaapple/house-prices-advanced-regression-techniques/detailed-exploratory-data-analysis-using-r)
+ 
+```{r}
+ 
+#Plotting function
+doPlots <- function(data_in, fun, ii, ncol=3) {
+  pp <- list()
+  for (i in ii) {
+    p <- fun(data_in=data_in, i=i)
+    pp <- c(pp, list(p))
+  }
+  do.call("grid.arrange", c(pp, ncol=ncol))
+}
+ 
+#Histrogram function
+plotHist <- function(data_in, i) {
+  data <- data.frame(x=data_in[[i]])
+  p <- ggplot(data=data, aes(x=factor(x))) + stat_count() + xlab(colnames(data_in)[i]) + theme_light() +
+    theme(axis.text.x = element_text(angle = 90, hjust =1))
+  return (p)
+}
+ 
+#Density function
+plotDen <- function(data_in, i){
+  data <- data.frame(x=data_in[[i]], SalePrice = data_in$SalePrice)
+  p <- ggplot(data= data) + geom_line(aes(x = x), stat = 'density', size = 1,alpha = 1.0) +
+    xlab(paste0((colnames(data_in)[i]), '\n', 'Skewness: ',round(skew(data_in[[i]], na.rm = TRUE), 2), '\n', 'Kurtosis: ', round(kurtosi(data_in[[i]], na.rm = TRUE), 2))) + theme_light()
+  return(p)
+}
+ 
+```
+ 
+With our newly created functions, we will first plot the categorical variables using histograms.  These histrograms will give us insight into how each feature is distributed.
+ 
+```{r}
+
+#Plot categorical variables in 4 columns
+doPlots(train_cat, fun = plotHist, ii = 1:12, ncol = 4)
+doPlots(train_cat, fun = plotHist, ii = 13:24, ncol = 4)
+doPlots(train_cat, fun = plotHist, ii = 25:36, ncol = 4)
+doPlots(train_cat, fun = plotHist, ii = 37:43, ncol = 4)
+
+```
+ 
+As we sift through the histrograms, I see two groups of categorical features.  The first is a traditional feature like neighborhood, where we see observations across all values for neighborhood.  Some are higher count, some are lower count, but most values are seeing a sizeable amount of observations.  Then there are the categorical features that look almost dichotomous, either because they are in fact dichotomous (ie street) or because the majority of observations fall under one value and the remaining small amount of observations found in the remaining values.  For example LandCount, almost all of the obseravtions fall under "Lvl" or level, and the rest are iether "Bnk", "HLS", or "Low". So essentially all the homes are either level, or not level.  It's almost like an inferred dichotomous variable. Let's see if those types of variables are showing different relationships with sale price.  This could be useful information when we are modeling.
+ 
+```{r}
+
+level<- train[train$LandContour == "Lvl",]
+nonlevel<- train[train$LandContour != "Lvl",]
+level$level_cat=as.numeric(rep(1, length(level$LandContour)))
+nonlevel$level_cat=as.numeric(rep(0, length(nonlevel$LandContour)))
+ 
+all<- rbind(level, nonlevel)
+
+mylm<- lm(SalePrice ~ level_cat, data = all)
+reg_line<- mylm$coefficients
+ 
+plot(x = all$level_cat, y = all$SalePrice, yaxt = "n", xaxt = "n", xlab = "Land Contour", ylab = "Sale Price - $", main = "Sale Price x Land Contour")
+xmarks = c(0, 1)
+ymarks = c(0, 100000, 200000, 300000, 400000, 500000, 600000)
+yticks<- format(ymarks, scientific = FALSE)
+xticks<- format(xmarks, scientific = FALSE)
+axis(2, at=yticks, labels=yticks)
+axis(1, at=xticks, labels=xticks)
+abline(reg_line, col = "red")
+grid()
+ 
+print (reg_line)
+ 
+```
+ 
+By adding a simple regression line, we can see that the overall sale price drops as we change from a non-level land contour to a level land contour as shown by the negative slope. Now let's check out another variable with the same type of behavior within it's distribution, BldgType.  BldgType is the type of home that was built.  Either a single family home, two famliy home, duplex, twin, or townhouse.  Again we see that the majority of homes are single family, so apply the same logic above, let's see how sale price is distribution across single family homes and everything else.
+ 
+```{r}
+
+single<- train[train$BldgType == "1Fam",]
+notsingle<- train[train$LandContour != "1Fam",]
+single$bldg_cat=as.numeric(rep(1, length(single$BldgType)))
+notsingle$bldg_cat=as.numeric(rep(0, length(notsingle$BldgType)))
+ 
+all2<- rbind(single, notsingle)
+ 
+mylm2<- lm(SalePrice ~ bldg_cat, data = all2)
+reg_line2<- mylm2$coefficients
+ 
+plot(x = all2$bldg_cat, y = all2$SalePrice, yaxt = "n", xaxt = "n", xlab = "Building Type", ylab = "Sale Price - $", main = "Sale Price x Building Type")
+xmarks = c(0, 1)
+ymarks = c(0, 100000, 200000, 300000, 400000, 500000, 600000)
+yticks<- format(ymarks, scientific = FALSE)
+xticks<- format(xmarks, scientific = FALSE)
+axis(2, at=yticks, labels=yticks)
+axis(1, at=xticks, labels=xticks)
+abline(reg_line2, col = "green")
+grid()
+ 
+print (reg_line2)
+
+```
+ 
+Here we notice the a similar but opposite dynamic.  Homes that are listed as 1, or single family homes are priced higher than homes that are not single family.  We can see this relationship in the positive slope of the simple regression line.  This could also be a helpful features when we are attempting to model home prices.  In the feature engineering section, we will make additional dummy variables for all of these inferred dichotomous variables. 
+ 
+Now, let's move on to the continuous variables.  Since these variables are numeric, we can graph them using density charts and see visually how they are distributed.  Once we have graphed these variables, we can see if we need to make any transformations to create more normal distributions (I've added the skewness and kurtosis so we can assess normality, skewness = 0 and kurtosis = 3 is normal).  A more normal distribution will be beneficial as we try to create weights or coefficients from them. 
+ 
+```{r}
+
+doPlots(train_cont, fun = plotDen, ii = 1:9, ncol = 3)
+doPlots(train_cont, fun = plotDen, ii = 10:18, ncol = 3)
+doPlots(train_cont, fun = plotDen, ii = 19:27, ncol = 3)
+doPlots(train_cont, fun = plotDen, ii = 28:36, ncol = 3)
+doPlots(train_cont, fun = plotDen, ii = 37:38, ncol = 1)
+
+```
+ 
+After observing the charts, we notice a couple things.  First, there are a few continuous variables that are essentially ordinal rankings.  For example, if we look at the variable FullBath, the number of full baths, we see that all houses are distributed from 0 to 3 bathrooms. So even though technically it's a continous variable, it's really a level or category.  For those variables, we won't be concerned with the normality of the distribution, because they behave more like categories than continuous variables.  Then we have the variables that are more traditionally continous, like TotalBsmtSF (total basement square footage).  We notice a fairly normal distribution with skewness at 0.49 and kurtosis at 1.73.  The last type of variables we observe are continous variables that are not normal.  For these variables we will attempt to use transformations in order to make them more normal.  For example LotFrontage, Linear feet of street connect to property, we have a continous variable but also non-normal.  Skewness is at 1.53 and Kurtosis is 11.68.  As a result here is where we stand after analyzing the continous variables:
+
+### Continous Variables that Behave Categorically
+* MSSubClass
+* OverallQual
+* OverallCond
+* YearBuilt
+* YearRemodAdd
+* BsmtFullBath
+* BsmtHalfBath
+* FullBath
+* HalfBath
+* BedroomAbvGr
+* KitchenAbvGr
+* TotRmsAbvGrd
+* Fireplaces
+* GarageYrBlt
+* GarageCars
+* MoSold
+* YrSold
+
+### Continous Variables that are Normal
+* BsmtFinSF1
+* TotBsmtSF
+* GrLivArea
+* GarageArea
+
+
+### Continous Variables that are not Normal
+* LotFrontage
+* LotArea
+* MasVnrArea
+* BsmtFinSF2
+* BsmtUnfSF
+* X1stFlrSF
+* X2ndFlrSF
+* LowQualFinSF
+* WoodDeckSF
+* OpenPorchSF
+* EnclosedPorch
+* X3SsnPorch
+* ScreenPorch
+* PoolArea
+* MiscVal
+
+Here we see that we have a lot of variables that are not normal and are possibly in need of transformation.  Before we attempt to transform all of the variables, let's see if any of the variables are having no impact on sale price.  Things like MiscVal, or a miscelleanous feature value, might not provide a significant impact on sale price because so few homes have a meaning feature value.  In order to get a quick indication, let's create a correlogram that shows the correlation of every variable against each other.  We will make special note of the correlations with sale price.  The following chart is created from the following kernel on the kaggle page [Exploratory Data Analysis using r] (https://www.kaggle.com/notaapple/house-prices-advanced-regression-techniques/detailed-exploratory-data-analysis-using-r)
+ 
+ 
+ 
+```{r}
+
+#run correlations and plot a correlogram
+correlations <- cor(na.omit(train_cont[,-1]))
+#only correlations abover 0.30 and below -0.30 included
+row_indic <- apply(correlations, 1, function(x) sum(x > 0.3 | x < -0.3) > 1)
+
+correlations<- correlations[row_indic ,row_indic ]
+corrplot(correlations, method="square")
+
+```
+
+In this correlogram, we're limiting the results to only those correlations that are either above 0.30 or below -0.30 to keep the output somewhat less verbose.  A few of the variables show a high correlatoin with sale price, overall quality, most of the square footage features, amount of rooms and bathrooms, and garage size.  Next, let's investigate those continous variables that were not normal.  The following variables show some correlation (either positive or negative) with sale price:
+
+### Positive Correlation
+* LotArea
+* MasVnrArea
+* BsmtFinSF1
+* X1stFlrSF
+* X2ndFlrSF
+* WoodDeckSF
+* OpenPorchSF
+
+
+### Negative Correlation
+* EnclosedPorch
+
+
+8 of the 15 variables we identified as continous and needing some transformation show some relationship with sale price.  Most of the variables have a positive correlation with sale price, which makes sense because most of them are size related.  Bigger lots and more square footage.  Oddly enough more square footage in an enclosed porch does not increase sale price.  There most likely is another dynamic happening there that we can't identify with just one simple correlation.  For example, more enclosed porch size could be in less desirable neighborhoods.  These 8 variables we will persist going forward, and the remaining 7 we will discard. 
+
+Before we can start to transform these variables, let's use some imputation for the missing values.  Luckily there is a package in R which allows this to be done very easily.  
+
+```{r}
+
+#Read in training data from CSV
+a=rep(0, length(ncol(train)))
+ 
+#add 0 for all missing values
+for (i in 1:ncol(train)){a[i]=sum(is.na(train[,i]))}
+a
+
+```
+
+We can see that there are 6 columns with a significant amount of missing values.  So we will exclude those going forward.  We will drop those same columns from the test dataset.  Then we will combine the training and testing set into one file so we can complete the imputation at the same time.
+
+```{r}
+
+#keep only columns without a high % of missing values
+trainnew = train[,c(-4, -7, -58, -73, -74, -75)]
+ 
+#read test data in now
+test<- read.csv('/Users/z013nx1/Documents/testkaggle.csv', header=TRUE, stringsAsFactors = T)
+str(test)
+test$SalePrice=as.integer(rep("", length(test$Id)))
+testnew = test[,c(-4, -7, -58, -73, -74, -75)]
+ 
+total = rbind(trainnew, testnew)
+a=rep(0, length(ncol(total)))
+for (i in 1:ncol(total)){a[i]=sum(is.na(total[, i]))}
+a
+
+```
+
+There are a few features left that need imputation after deleted the variables with a lot of missing values.  The lost column has a lot of missing values as that is the sale price in the test set.  Now we're ready to start imputing.  The MICE package allows us to use a classification and regression tree (CART) technique. 
+
+```{r}
+
+install.packages("mice")
+install.packages("plyr")
+install.packages("Amelia")
+ 
+library(mice)
+library(plyr)
+library(Amelia)
+
+#Visual to show the missing values that are left after we've dropped the columns with a lot of missing values.
+missmap(total, main = "Missing Map")
+
+```
+
+The missing map here shows us another visual of the missing observations.  THe mice package will now be used and it will complete the dataset with missing values.
+
+```{r}
+
+#impute using CART or classification and regression trees but exclude price
+imp=mice(total[,c(-75)], m=1, method="cart")
+totalimp=complete(imp)
+
+```
+
+Running a final missing map, we can verify that we have indeed imputed for all missing values.
+
+```{r}
+
+#impute using CART or classification and regression trees but exclude price
+missmap(totalimp, main = "Missing Map")
+
+```
+
+The map confirms that we have indeed imputed for all missing values.  Lastly, we'll add back on sale price and our dataset is ready for transformation and feature engineering.
+
+```{r}
+
+totalimp$SalePrice = total$SalePrice
+
+```
+
+### Variable Transformation
+
+Now that we have identified the 8 variables that require transformation, let's examine how we should transform them.  However, one of the 8 variables have been removed due to the amount of missing values, MasVnrArea, so we are only left with 7.  Let's plot the features in question to see what they look like before we tranform them.
+
+```{r}
+
+numeric_var_all <- which(sapply(totalimp, is.numeric))
+
+numeric_var_to_transform<- c(4, 33, 42, 43, 64, 65, 66, 75)
+
+total_trans <- totalimp[, c(4, 33, 42, 43, 64, 65, 66, 75)]
+doPlots(total_trans, fun = plotDen, ii = 1:4, ncol = 2)
+doPlots(total_trans, fun = plotDen, ii = 5:7, ncol = 2)
+
+```
+
+First, Lot Area looks to be lognormal, as it's heavily skewed with a long tail to the right.  Let's transform Lot Area with log. 
+
+```{r}
+
+LotAreaDens<- density(log(totalimp$LotArea))
+plot(LotAreaDens)
+skew(log(totalimp$LotArea))
+kurtosi(log(totalimp$LotArea))
+qqplot(x = log(totalimp$LotArea), y = mynorm)
+
+```
+
+As we can see with the plot, the distribution is much more normal.  The QQ plot shows that while it's not perfectly normal, it's much better.
+
+Next, let's look at BsmtFinSF1.  The distribution is skewed, so log might work, but we have 0 values which do not compute with log.  As a result, we will square the feature. 
+
+```{r}
+
+BsmtDens<- density(totalimp$BsmtFinSF1**2)
+plot(BsmtDens)
+skew(totalimp$BsmtFinSF1**2)
+kurtosi(totalimp$BsmtFinSF1**2)
+qqplot(x = totalimp$BsmtFinSF1**2, y = mynorm)
+
+```
+
+Some interesting dynamics with this variable.  Before we did any transformation, we had a big kink in the data set.  Squaring the feature removes that kink which is good, but it introduces a lot of skew as 0 values do not change (0**2 = 0) but non-zero values increase.  As a result, we will keep the original feature and deal with the kink.
+
+The next two features are very related to each other, X1stFlSF and X2ndFlSF, the first and second floor square footage.  It might make sense for us to combine those into one feature for two purposes.  First, it might normalize the feature and second it might help with some multicollinearity or regularization later on.
+
+```{r}
+
+TotalUpSF<- density(totalimp$X1stFlrSF + totalimp$X2ndFlrSF)
+plot(TotalUpSF, main = "Total Upstairs Square Footage by Household")
+skew(totalimp$X1stFlrSF + totalimp$X2ndFlrSF)
+kurtosi(totalimp$X1stFlrSF + totalimp$X2ndFlrSF)
+qqplot(x = (totalimp$X1stFlrSF + totalimp$X2ndFlrSF), y = mynorm)
+
+```
+
+Lucky for us, our hypothesis was correct and we got both benefits we were hoping for.  The distribution is much more normal and later on in modeling we will have decreased our chances for multicollinearity and penalty from regularization.  
+
+The last 3 variables we need to address are very similar.  Wood deck square footage, enclosed porch square footage, and open porch square footage.  All of these features have similar distributions so let's try to address these 3 features simultaneously.  
+
+```{r}
+
+woodlog<- density(log(totalimp$WoodDeckSF))
+closelog<- density(log(totalimp$EnclosedPorch))
+openlog<- density(log(totalimp$OpenPorchSF))
+plot(woodlog, main = "log(WoodDeckSF)")
+plot(closelog, main = "log(EnclosedPorchSF)")
+plot(openlog, main = "log(OpenPorchSF)")
+
+```
+
+Since these features have so many 0s included, we have hard time using the log transformation even though the distributions do look a bit better.  And not only do we have some 0 observations, but we have a very large amount of 0s.  
+
+```{r}
+
+sum(totalimp$WoodDeckSF == 0)
+sum(totalimp$OpenPorchSF == 0)
+sum(totalimp$EnclosedPorch == 0)
+
+```
+
+Because of this, let's create a dichotomous variable that tell us whenever the observation is 0 or greater than 0.  This dummy variable will be an yes/no flag for each house in regards to these variables.
+
+Now that we have assessed all of our transformations, let's create our new dataset.
+
+
+```{r}
+
+#log of lot area, drop lot area
+totalimp$LogLotArea<- log(totalimp$LotArea)
+totalimp<- totalimp[, -4]
+
+#add x1 and x2 together and remove x1 and x2
+totalimp$TotalUpSF<- totalimp$X1stFlrSF + totalimp$X2ndFlrSF
+totalimp<- totalimp[, c(-41, -42)]
+
+#create 3 dummy variables for wood, enclosed, open
+dummywood<- as.numeric(totalimp$WoodDeckSF !=0)
+totalimp$WoodDeckCat<- dummywood
+
+dummyenclose<- as.numeric(totalimp$EnclosedPorch !=0)
+totalimp$EnclosedPorchCat<- dummyenclose
+
+dummyopen<- as.numeric(totalimp$OpenPorchSF!=0)
+totalimp$OpenPorchCat<- dummyopen
+
+```
+
+### Feature Engineering
+
+We are given quite a few features within the dataset, however we can improve upon the feature set we're given by creating new features by tweaking the ones we have.  We already did this once we we add first and second floor square footage to create total square footage upstairs.  These types of features are the ones we will engineer in this section.  First let's go back to our plots of our categorical variables and make dichotomous dummy variables for the features that are behaving that way.  The list of categorical variables that exhibit this behavior are:
+
+* LandContour
+* Condition1
+* Condition2
+* BldgType
+* RoofMatl
+* BsmtFinType2
+* Heating
+* Functional
+* GarageQual
+* GarageCond
+* SaleType
+* SaleCondition
+
+Next we create dummy variables for these features.  Label observations with a 1 if they belong to the popular class and 0 if they are anything else.
+
+```{r}
+
+dummyLand<- as.numeric(totalimp$LandContour == 'Lvl')
+totalimp$LandContourCat<- dummyLand
+
+dummycond1<- as.numeric(totalimp$Condition1 == 'Norm')
+totalimp$Condition1Cat<- dummycond1
+
+dummycond2<- as.numeric(totalimp$Condition2 == 'Norm')
+totalimp$Condition2Cat<- dummycond2
+
+dummyBT<- as.numeric(totalimp$BldgType == '1Fam')
+totalimp$BldgTypeCat<- dummyBT
+
+dummyroof<- as.numeric(totalimp$RoofMatl == 'CompShg')
+totalimp$RoofMatlCat<- dummyroof
+
+dummybsmt<- as.numeric(totalimp$BsmtFinType2 == 'Unf')
+totalimp$BsmtFinType2Cat<- dummybsmt
+
+dummyheat<- as.numeric(totalimp$Heating == 'GasA')
+totalimp$HeatingCat<- dummyheat
+
+dummyfun<- as.numeric(totalimp$Functional == 'Typ')
+totalimp$FunctionalCat<- dummyfun
+
+dummyGQ<- as.numeric(totalimp$GarageQual == 'TA')
+totalimp$GarageQualCat<- dummyGQ
+
+dummyGC<- as.numeric(totalimp$GarageCond == 'TA')
+totalimp$GarageCondCat<- dummyGC
+
+dummyST<- as.numeric(totalimp$SaleType == 'WD')
+totalimp$SaleTypeCat<- dummyST
+
+dummySC<- as.numeric(totalimp$SaleCondition == 'Normal')
+totalimp$SaleConditionCat<- dummySC
+
+```
+
+
+We have successfully created dummy variables for the factor variables behaving dichotomously, now let's observe the month and year variables and create an index for time.  It would make sense that with inflation, house prices would increase as time goes on.  So let's create a variable of time that will act as an index.  
+
+```{r}
+
+#Integer index over time
+totalimp$YearMo=as.numeric(totalimp$YrSold)*12+as.numeric(totalimp$MoSold)
+
+```
+
+Additionally, let's convert our month and year variables to factors as they behave more like categories than numerics. 
+
+```{r}
+
+#make them factors to address seasonality
+totalimp$MoSold=as.factor(totalimp$MoSold)
+totalimp$YrSold=as.factor(totalimp$YrSold)
+
+```
+
+
+Now let's take a closer look at the month sold variable.
+
+```{r}
+
+#make them factors to address seasonality
+plot(totalimp$MoSold, main = "Home sold by month")
+
+```
+
+Here we can see that there is an uptick in sales around the summer months, specifically months May, June, and July.  So let's make a dummy variable that indicates whether it's summer or not.
+
+```{r}
+
+dummysummer<- as.numeric(totalimp$MoSold == 5 | totalimp$MoSold == 6 | totalimp$MoSold == 7)
+totalimp$SummerCat<- dummysummer
+
+```
+
+That completes some of the feature engineering maintenance where we are getting the existing features to behave how they are persisting in the data.  Next we will get creative and try to engineer new concepts not found in the features at surface level.  Going back to our example on total square footage upstairs.  Why not create a variable that has the entire square footage of the house inclusive of the basement and all the levels?
+
+```{r}
+
+totalimp$TotalSF<- totalimp$TotalBsmtSF + totalimp$GrLivArea
+plot(density(totalimp$TotalSF))
+
+```
+
+Now that we have our total square footage variable, we can see that it's a bit skewed.  So let's take the log transformation of it and see if we can make it behave more normally.
+
+```{r}
+
+skew(log(totalimp$TotalSF))
+kurtosi(log(totalimp$TotalSF))
+plot(density(log(totalimp$TotalSF)), main = "log(Total Square Footage in Household)")
+qqplot(x= log(totalimp$TotalSF), y = mynorm)
+```
+
+That looks better! So we'll remove total square footage and keep the log transformed total square footage.
+
+
+```{r}
+
+totalimp$LogTotalSF<- log(totalimp$TotalSF)
+
+#remove actual SF
+totalimp<- totalimp[, -92]
+
+```
+
+We can use the same concept with bathrooms as we did with total square footage.  Let's add all of the bathrooms together to get one variable that lists the total bathroom count for the house.  One small tweak is that we only want to count half baths as 0.5 instead of 1, so we'll divide the total amount of half baths by 2 to acheive this.
+
+```{r}
+
+totalimp$TotalBaths<- totalimp$FullBath + (totalimp$HalfBath / 2) + totalimp$BsmtFullBath + (totalimp$BsmtHalfBath / 2)
+plot(density(totalimp$TotalBaths), main = "Total Baths in Household")
+
+```
+
+The distibution looks OK, so let's see if it has any impact on sale price which would warrant it's inclusion in the final model.
+
+```{r}
+
+mylm<- lm(totalimp$SalePrice ~ totalimp$TotalBaths, data = totalimp)
+reg_line_baths<- mylm$coefficients
+ 
+plot(x = totalimp$TotalBaths, y = totalimp$SalePrice, yaxt = "n", xlab = "Total Baths", ylab = "Sale Price - $", main = "Sale Price x All Baths")
+ymarks = c(0, 100000, 200000, 300000, 400000, 500000, 600000)
+yticks<- format(ymarks, scientific = FALSE)
+axis(2, at=yticks, labels=yticks)
+abline(reg_line_baths, col = "red")
+grid()
+
+print (reg_line_baths)
+
+```
+
+Clearly we are seeing a positive relationship here between the amount of bathrooms and sale price so we will definitely include it in the feature set. 
+
+One feature that I was hoping to find in the dataset was the size of the yard.  Lot area definitely helps with this, but it's possible that lot size is based on neighborhood rather than yard.  So the ratio of the foundation of the house and the lot area seems like it could be a good proxy for how much space, the house is taking up in the lot.  If the ratio is small, it's either a rural home or a home with a large back yard.  Coupling this with neighborhood or zoning for example would provide insights into whether the house has a large backyard.  A few things to note: first we will have to create a new feature, foundation size.  We'll use the total square footage in the basement as the basement is only one level.  Next, prior we transformed our lot area with a log, so we'll have to exponent it in order to get a full number for lot area that we can divide against foundation size.
+
+```{r}
+
+#Foundation Size
+totalimp$FoundationSize<- totalimp$BsmtFinSF1 + totalimp$BsmtFinSF2
+
+#Foundation Size / Lot area.  Need to convert log lot area back with an exponent first
+totalimp$YardSize<- totalimp$FoundationSize / exp(totalimp$LogLotArea)
+plot(density(totalimp$FoundationSize), main = "Foundation Size")
+plot(density(totalimp$YardSize), main = "Yard Size | Foundation / Lot Area")
+
+```
+
+
+Now that we have successfully engineered some features, let's determine which features are having the biggest impact on sale price.  There is a nice package called mlr, machine learning r, that has the ability to calculate feature importance based on the information gained from adding that feature.  Let's run through the features that we have engineered and see which ones rise to the top
+
+
+```{r}
+
+install.packages("mlr", repo="http://cran.us.r-project.org")
+install.packages("randomForestSRC", repo="http://cran.us.r-project.org")
+
+library(mlr)
+library(randomForestSRC)
+
+
+train_final<- totalimp[1:1456,]
+
+#Transforming sale price to log
+train_final$LogSalePrice<- log(train_final$SalePrice)
+
+#removing non-log sale price so it's not included in the results
+train_final<- train_final[, -72]
+
+#Create regression task
+trainTask<- makeRegrTask(id = deparse(substitute(train_final)), data = train_final, target = "LogSalePrice")
+
+#genereate feature importance and plot in descening order
+im_feat <- generateFilterValuesData(trainTask)
+plotFilterValues(im_feat,n.show = 95)
+
+```
+
+The above chart is showing each features rf.importance when regressed against log(SalePrice).  This is show us the features that are having the biggest impact on the variability of log(SalePrice).  While this chart makes it impossible to read the feature names on the x-axis, we can get a heuristic into how many features we should include.  It looks like roughly half of the features are proving important.  So let's look at the top 40 features.
+
+```{r}
+
+plotFilterValues(im_feat,n.show = 40)
+
+```
+
+Here we can see what's driving sale price.  Most notably, we see that the total square footage is the most important.  Of course, this makes a lot of intuitive sense.  The list of the top 10 is as follows:
+
+1. log(TotalSF)
+2. OverallQual
+3. TotalUpSF
+4. GrLivArea
+5. YearBuilt
+6. Neighborhood
+7. ExterQual
+8. KitchenQual
+9. GarageCars
+10. TotalBsmtSF
+
+These top 10 features can be group together in themes:
+
+#### Size
+* log(TotalSF)
+* TotalUpSF
+* GrLivArea
+* TotalBsmtSF
+
+#### Quality
+* OverallQual
+* ExterQual
+* KitchenQual
+
+#### Non-House Specific
+* YearBuilt
+* Neighborhood
+
+Most of the additional features can be placed into these groupings and it seems like these are the driving factors for sale price.  Now that we hav identified which features are the most important, we will build models with these features.  Final feature selection is:
+
+1. LogTotalSF
+2. OverallQual
+3. TotalUpSF
+4. GrLivArea
+5. YearBuilt
+6. Neighborhood
+7. ExterQual
+8. KitchenQual
+9. GarageCars
+10. TotalBsmtSF
+11. TotalBaths
+12. GarageArea
+13. YearsSinceRemod
+14. YearRemodAdd
+15. BsmtQual
+16. FoundationSize
+17. LogLotArea
+18. BsmtFinSF1
+19. OverallCond
+20. GarageYrBlt
+21. GarageType
+22. Fireplaces
+23. MSZoning
+24. CentralAir
+25. FullBath
+26. BsmtUnfSF
+27. BsmtFinType1
+28. Exterior1st
+29. Exterior2nd
+30. MSSubClass
+31. GarageFinish
+32. YardSize
+33. HouseStyle
+34. BedroomAbvGr
+35. Foundation
+36. OpenPorchSF
+37. HeatingQC
+38. BldgType
+39. TotRmsAbvGrd
+40. BsmtFullBath
+
+```{r}
+
+total_model<- totalimp[,c('SalePrice','LogTotalSF','OverallQual','TotalUpSF','GrLivArea','YearBuilt','Neighborhood','ExterQual','KitchenQual','GarageCars','TotalBsmtSF','TotalBaths','GarageArea','YearsSinceRemod','YearRemodAdd','BsmtQual','FoundationSize','LogLotArea','BsmtFinSF1','OverallCond','GarageYrBlt','GarageType','Fireplaces','MSZoning','CentralAir','FullBath','BsmtUnfSF','BsmtFinType1','Exterior1st', 'Exterior2nd', 'MSSubClass',  'GarageFinish', 'YardSize', 'HouseStyle', 'BedroomAbvGr', 'Foundation','OpenPorchSF', 'HeatingQC', 'BldgType', 'TotRmsAbvGrd', 'BsmtFullBath')]
+
+```
+
+
+### Models
+
+
+#### Multvariate Stepwise Regression
+
+The first technique we will try with this dataset is a simple regression.  It would be nice to have a principal components approach due to the common themes we were finding in the data, but since we have so many categorical variables that are meaningful, we will run the regression without it. A PCA approach requires standardized data, so standardizing factors doesn't seem like it would make sense.  Running a simple multivariate regression on the features we've identified reveals the following:
+
+```{r}
+
+install.packages("MASS", repo="http://cran.us.r-project.org")
+library(MASS)
+ 
+#using log because of log-normal sales distribution
+total_model$LogSalePrice<- log(total_model$SalePrice)
+
+#Removing Sale price because we are using log sales prices
+total_model<- total_model[, -1]
+
+#running LM model
+lm1<- lm(LogSalePrice ~., data = total_model[1:1456,])
+
+#stepwise regression
+mystep1=stepAIC(lm1, direction="both")
+
+mystep1$anova
+
+```
+
+After running the stepwise regression to minimize AIC, we are left with 26 variables (14 were removed) that produce significant F values to be included in the model.  Let's examine the residuals and performance of the model.
+
+```{r}
+
+summary(mystep1)
+
+```
+
+The adjusted r-squared is fairly high, at 0.9141, which means that we are explaining the variance in our dependent variable very well.  The residuals look to be normally distributed as well, which is a key assumption in a linear regresion. 
+```{r}
+
+plot(mystep1)
+
+```
+
+The residuals are showing no pattern, and close to being normally distributed when we look at the QQplot.  Next, let's look at the multicollinearity that exists within our dataset.  
+
+```{r}
+
+install.packages("car", repo="http://cran.us.r-project.org")
+library(car)
+
+vif(mystep1)
+
+```
+
+There are some large values for the YearSinceRemod and YearRemodAdd.  Since one of these variables are derived from the other, we should probably exclude one.  Also, considering that the YearSinceRemod was more important when we were looking at feature importance we will exclude YearRemodAdd.  Then we will quickly re-run the linear model and see how our results change.
+
+```{r}
+
+total_model<- totalimp[1:2919,c('SalePrice','LogTotalSF','OverallQual','TotalUpSF','GrLivArea','YearBuilt','Neighborhood','ExterQual','KitchenQual','GarageCars','TotalBsmtSF','TotalBaths','GarageArea','YearsSinceRemod','BsmtQual','FoundationSize','LogLotArea','BsmtFinSF1','OverallCond','GarageYrBlt','GarageType','Fireplaces','MSZoning','CentralAir','FullBath','BsmtUnfSF','BsmtFinType1','Exterior1st', 'Exterior2nd', 'MSSubClass',  'GarageFinish', 'YardSize', 'HouseStyle', 'BedroomAbvGr', 'Foundation','OpenPorchSF', 'HeatingQC', 'BldgType', 'TotRmsAbvGrd', 'BsmtFullBath')]
+
+total_model$LogSalePrice<- log(total_model$SalePrice)
+
+#Removing Sale price because we are using log sales prices
+total_model<- total_model[, -1]
+
+#running LM model
+lm2<- lm(LogSalePrice ~., data = total_model[1:1460,])
+
+#stepwise regression
+mystep2=stepAIC(lm2, direction="both")
+
+mystep2$anova
+
+```
+
+This run from the model has now exlcluded 17 variables and left us with only 23 as opposed to 26 before.  Let's see how the fit compares.
+
+```{r}
+
+summary(mystep2)
+
+```
+
+Adjusted r-squared is still very high which is great.  Let's now re-assess multicollinearity.
+
+```{r}
+
+vif(mystep2)
+
+```
+
+All of our values have dropped and are now below 10.  Next examine residuals to make sure our assumptions of linear models are confirmed.  
+
+```{r}
+
+plot(mystep2)
+
+```
+
+Again we see now relationship in the residuals and we can observe from the QQplot that they are fairly normal.  Let's next assess the error so we can compare this model against other ones we will create.  
+
+```{r}
+
+MSE_LM<- mean(mystep2$residuals**2)
+RMSE_LM<- mean(sqrt(mystep2$residuals**2))
+
+MSE_LM
+RMSE_LM
+```
+
+Lastly, let's export our predictions so we can upload them into Kaggle and see how well our model performed.  Additionally, we will plot them to make sure that we don't have any crazy values.
+
+
+```{r}
+
+mrpredfinal = predict(mystep2, total_model[1461:2919,])
+finallmpreds<- exp(mrpredfinal)
+plot(finallmpreds, yaxt = "n", main = "Predicted Values for Test")
+grid()
+ymarks = c(0, 100000, 200000, 300000, 400000, 500000, 600000)
+yticks<- format(ymarks, scientific = FALSE)
+axis(2, at=yticks, labels = yticks)
+
+write.csv(finallmpreds, '/Users/z013nx1/Documents/lmfinal.csv')
+
+```
+
+
+#### Random Forest
+ 
+The next model that we will explore is a random forest.  For this model we will start with the same 40 features that we ended up with after we did the feature importance. 
+ 
+```{r}
+
+total_model<- totalimp[1:2919,c('SalePrice','LogTotalSF','OverallQual','TotalUpSF','GrLivArea','YearBuilt','Neighborhood','ExterQual','KitchenQual','GarageCars','TotalBsmtSF','TotalBaths','GarageArea','YearsSinceRemod','BsmtQual','FoundationSize','LogLotArea','BsmtFinSF1','OverallCond','GarageYrBlt','GarageType','Fireplaces','MSZoning','CentralAir','FullBath','BsmtUnfSF','BsmtFinType1','Exterior1st', 'Exterior2nd', 'MSSubClass',  'GarageFinish', 'YardSize', 'HouseStyle', 'BedroomAbvGr', 'Foundation','OpenPorchSF', 'HeatingQC', 'BldgType', 'TotRmsAbvGrd', 'BsmtFullBath')]
+
+total_model$LogSalePrice<- log(total_model$SalePrice)
+
+```
+
+Now that our data is loaded, we will run the randomForest package.  Within this run, we can utilize the do.trace function which allows us to calculate the error in set intervals of trees as the functions is working.  After this is done running we can observe what quantities of trees make for the best model. 
+ 
+```{r} 
+install.packages("randomForest", repo="http://cran.us.r-project.org")
+library(randomForest)
+
+myforest<- randomForest(LogSalePrice ~ ., data = total_model[1:1460,],  do.trace = 100, ntree = 1000, importance = TRUE)
+```
+
+Following the output, we can see that the model with 700 trees produced the lowest error.  As a result, we will utilize the model going forward.  Re-running the model with 700 trees.
+
+
+
+```{r} 
+forest700<- randomForest(LogSalePrice ~ ., data = total_model[1:1460,], ntree = 700, importance = TRUE)
+
+forest700 
+```
+
+
+Here we can see that we've used 700 trees in our random forest and the mean of squared residuals is 0.01769.  Our linear model was actually a bit better than this, as it had a mean squared error of 0.013.  The variance explained is 88.9%, which is encouraging.  This is slightly worse than the adjusted r-squared of the linear model as well.  
+
+Next we'll plot the actuals vs. predicted.
+```{r} 
+
+plot(x = exp(total_model[1:1460,]$LogSalePrice), y = exp(forest700$predicted), xlab = "Actual", ylab = "Predicted", main = "Predicted vs. Actual | Random Forest")
+
+```
+
+The predictions seem to be working well and we're observing a nice linear fit between the two axis.  Next we'll model the test set plot them to make sure nothing looks crazy and then output for submission.  
+
+```{r}
+
+forestpredict=predict(forest700, totalimp[1461:2919,])
+
+#exponent because it's the log
+forestpreds=exp(forestpredict)
+
+plot(forestpreds, yaxt = "n", main = "Predicted Values for Test | RF")
+grid()
+ymarks = c(0, 100000, 200000, 300000, 400000, 500000, 600000)
+yticks<- format(ymarks, scientific = FALSE)
+axis(2, at=yticks, labels = yticks)
+write.csv(forestpreds, '/Users/z013nx1/Documents/forestfinal.csv')
+
+```
+
+
+Before we move on to the next model category, let's try to fit the random forest model with all the variables, instead of the variables that were listed as important.  I want to test the random forest model and see how well it performs when we chuck a buck of features at it.  So we'll use the full dataset, and fit the model with the do.trace options to find the optimal amount of trees, then fit the model based on that and assess our performance
+
+```{r}
+
+#create log sales price for dependent variable
+totalimp$LogSalesPrice<- log(totalimp$SalePrice)
+str(totalimp)
+#remove the actual sales price and ID
+totalimp<- totalimp[, c(-1, -72)]
+totalimp<- totalimp[, -71]
+
+
+#build the model
+fullforest<- randomForest(LogSalesPrice ~ ., data = totalimp[1:1460,],  do.trace = 100, ntree = 1000, importance = TRUE)
+```
+ 
+Here we can see that 700 trees again performs the best, but only marginally.  However, why wouldn't we chose the best even if it's only marginally better?  Of course we would, so we'll select the version with 500 trees and build out model.  However, we didn't see a large improvement from only the featurs listed as important. 
+
+```{r}
+
+fullforest700<- randomForest(LogSalesPrice ~ ., data = totalimp[1:1460,],  ntree = 700, importance = TRUE)
+ 
+fullforest700
+
+```
+
+Here we see that we did not significantly improved our model.  We have a mean squared error of only 0.01829 and we are explaining 88.53% of the variance, much like the previous subset model.
+
+Next let's plot the actual values against the fitted values to see if we have an strange relationships.
+
+```{r}
+
+plot(x = exp(totalimp[1:1460,]$LogSalesPrice), y = exp(fullforest700$predicted), xlab = "Actual", ylab = "Predicted", main = "Predicted vs. Actual | Random Forest 700")
+
+```
+
+Everything looks good here, and we can see a the same linear relationship we saw before.  
+
+Since this model is no better than the subset model, we are not going to use it to predict the test set.  Actually, it's probably quite a bit worse because it's using so many more features and we're not penalizing the model for that.  The subset model with 700 trees will be our model we submit.
+
+#### Support Vector Machine
+
+The last model type we will explore is the support vector regression (SVR).  Support vector machines are machine learning technique that utilize a margin concept where observations near the margin are not included, so only "marginal" observations are ignored.  Like any other machine learning technique we are minimizing a cost function, and the cost function for a SVR is 1/2||w**2||.  Thankfully, R has a package to do this for us. So first let's build the model.  As we did before, we'll only use the subset dataset which has the 40 features identified as important.  We've used code snippets taken from this source [SVM Tutorial] (http://www.svm-tutorial.com/2014/10/support-vector-regression-r/)
+
+```{r}
+
+install.packages("e1071", repo="http://cran.us.r-project.org")
+library(e1071)
+
+svr<- svm(LogSalePrice ~ ., data = total_model[1:1460,])
+
+predictedY <- predict(svr, total_model[1:1460,])
+
+svr
+
+plot(x = total_model[1:1460,]$LogSalePrice, y = predictedY, xlab = "Acutal", ylab = "Predicted", main = "Predicted vs. Actual | SVR")
+
+```
+
+
+In this package, the SVM kernel that was used is the radial based kernel.  There are many types of kernels to use (ie polynomial) but we'll stick to just the kernel produced from this package.  When we look at the actual values vs. the predicted we see that it's producing decent predictions.  The lower ends of the model are noticeably different than the middle and top.  
+
+
+```{r}
+
+plot(svr$residuals)
+
+```
+
+A pretty random spread of residuals across our dataset suggests to use that we're not bias to different types of observations.  This is a good thing when we're going to predict sales price from a different dataset.  
+
+```{r}
+
+error <- total_model[1:1460, "LogSalePrice"] - predictedY
+
+mse <- function(error)
+{
+  mean(error^2)
+}
+ 
+error <- svr$residuals  # same as data$Y - predictedY
+svrPredictionRMSE <- mse(error) 
+
+svrPredictionRMSE
+
+```
+
+Here we observe the smallest error that we have observed so far at 0.0111897.  Now let's predict our test set with this model
+
+```{r}
+
+svrpreds <- predict(svr, total_model[1461:2919,])
+
+#exponent our log values
+svrpredsfinal<- exp(svrpreds)
+
+plot(svrpredsfinal, yaxt = "n", main = "Predicted Values for Test | SVR")
+grid()
+ymarks = c(0, 100000, 200000, 300000, 400000, 500000, 600000)
+yticks<- format(ymarks, scientific = FALSE)
+axis(2, at=yticks, labels = yticks)
+write.csv(svrpredsfinal, '/Users/z013nx1/Documents/svrfinal.csv')
+
+```
+
+Nothing looks unreasonable here, so we will use these predictions for our submission.  
+
+
+### Literature
+ 
+1. [Boston Housing Prices] (https://rpubs.com/yroy/Boston)
+This paper discusses regression techniques with housing data
+
+2. [Modeling Home Prices Using Realtor Data] (http://ww2.amstat.org/publications/jse/v16n2/datasets.pardoe.pdf)
+
+3. [Random Forest Regression] (https://escholarship.org/uc/item/35x3v9t4#page-1)
+
+4. [Quantitative Prediction of Mouse Class using Support Vector Machine Regression] (https://bmcbioinformatics.biomedcentral.com/articles/10.1186/1471-2105-7-182)
+
+5. [Predicting Intestinal Absorption with Support Vector Machine Regression] (http://www.mdpi.com/1422-0067/9/10/1961/htm)
+
+ 
+### Limitations
+ 
+The models that I've developed are made up of three model classes, and each have their own unique nuances.  For example, the regression models will always be subject to linear relationships between the regressor variables, so this could prove troublesome when we predict out of sample data.  The random forest model has many components to it, so finding the right tuning can be difficult.  Decreasing the error from 0.12 to 0.11 won't bear much fruit in a practical sense, but will move you up the kaggle leaderboard! An interesting dynamic between practical use and actual model performance. Lastly, the SVM can be heavily tuned as well.  So the the limits of that model are based on the user's ability to tune and tweak them.
+ 
+### Future work
+ 
+Continuing from the theme above in the limitations, I definitely want to try and tune the models and see if I can decrease the error enough to climb up the leaderboard.  Random forest tree depth is one potential area for tuning as well has tweaking the kernels in the SVM.  I have a decent amount of python code that I can utilize for this, so should be fairly efficient to continue to iterate.  
+ 
+### Learning
+ 
+One of the biggest learnings that I continue to see is that simple models don't mean that they are bad models! Time and again, the linear regression models perform sufficiently. In this dataset, I was able to create a smaller error with the linear regression model than the random forest even though the random forest has a lot to explore still.  A learning that I'm definitely going to take with me after this course and the entire MSPA program is the simple is great and a very nice way to benchmark our performance.  
