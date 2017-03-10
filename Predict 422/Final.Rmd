@@ -35,6 +35,8 @@ length(data.test[,1])
 
 The training dataset has 3,984 observations and we will validate our models on the validation set which consists of 2,018 observations.  The testing set that we will deploy our final models on has 2,007 observations and we do not have any values for DONR, the binary classification of donor/non-donor or DAMT, the amount of donation for a donor.
 
+Now that our datasets are split, let's examine the feature set of the training dataset.  Listed below is a table of the features encompassed in the dataset and the description for what it represents.  We notice a few groups of features.  We have a few location features, potential donor demographics features, income information about the potential donor's neighborhood features, and past donation and promotion history if applicable. 
+
 Feature | Description
 -----------------------------|-------------------------------------------------
 ID number | Number used as an ID
@@ -61,7 +63,8 @@ AGIF | Average dollar amount of gifts to date
 DONR | Classification Response Variable (1 = Donor, 0 = Non-donor)
 DAMT | Prediction Response Variable (Donation Amount in $).
 
-Now that our datasets are split, let's examine the feature set of the training dataset.  First let's plot a correlation matrix to see the relationship of each feature with each, but also how each individual feature is correlated with our response variables. 
+
+After our qualitative observations of the feature set, let's plot a correlation matrix to see the correlation of the features and their relationship with our response variables. 
 
 ```{r include=FALSE}
 #remove ID 
@@ -75,7 +78,43 @@ corrgram(data.training, order=NULL, lower.panel=panel.shade,
 
 ```
 
-In this graphic, the heavily shaded blue boxes are indicating high positive correlations and the heavily shaded red boxes are a representation of a negative correlation.  This correlogram shows us a few things we might except, for example if someone donates, their donation amount is positive.  Additionaly, the regions have a negative correlation since each potential donor can only be located in one region.  The features about income are related to donor and donor amount as well.  We notice a positive correlatoin with average and median income as well as a negative correlation the percent of low income families in the donor's neighborhood.  The heaviest shaded areas for donor and donor amount appear to be the feature indicating home ownership and the number of children in the household. 
+In this graphic, the heavily shaded blue boxes are indicating high positive correlations and the heavily shaded red boxes are a representation of a negative correlation.  This correlogram shows us a few things we might except, for example if someone donates, their donation amount is positive.  Additionaly, the regions have a negative correlation with the other regions since each potential donor can only be located in one region.  The features about income are related to donor and donor amount as well.  The heaviest shaded areas for donor and donor amount appear to be the features indicating home ownership and the number of children in the household. 
+
+Let's dig deeper into some of the features that popped from the correlgram.  Plotting the donation amount for the factors of home ownership (home = 0 for non-homeowner, and home = 1 for home owner) reveals the following:
+
+```{r include=FALSE}
+
+library(lattice)
+densityplot(~data.training$damt|as.factor(data.training$home), 
+  	main="Density Plot by Home Ownership",
+   xlab="Donation Amount")
+
+```
+
+Visualizing the donation amount by the factors of home ownership is pretty revealing.  Here we see that those that are home owners have significantly more observations with donations.  An additional benefit to visualizing by donation amount is that we can also see the binary classification of donor relationship.  Since someone who does not donate would have a donation amount = 0, we can observe the amount of observations with 0 donation amount to see the amount of non-donors.  Clearly those that own homes have significantly more donors and more donations.  This is powerful evidence that this feature should be included in our modeling exercise. 
+
+Additionally, the wealth rating also was positively correlated with donation amount so let's plot that against donation amount as well.
+
+```{r include=FALSE}
+
+library(lattice)
+densityplot(~data.training$damt|as.factor(data.training$wrat), 
+  	main="Density Plot by Wealth Rating",
+   xlab="Donation Amount",
+   layout=c(4,3))
+
+```
+
+Wealth rating uses 10 levels, 0-9 with 0 being the lowest level of wealth of 9 the highest.   Observing the graphic we notice that the lower levels of wealth have more non-donors, while the highest level of income have significantly more donors and donation amounts.  One thing to note is that the lowest levels of 0 and 1 seem to have a similar distribution, while the rest of the levels have a fairly similar distribution.  We should consider making an additional variable that lists wealth as low (0, 1) or high (2-9).
+
+There are quite a few income-related features similiar to wealth rating, which begs the question of if we need to include all of them in the models we develop.  If they are highly correlated, they are providing redundant information and will ultimately hurt certain modeling approaches such as linear regression.
+
+```{r include=FALSE}
+
+splom(data.training[c(9, 10, 11, 12, 13, 22)], main = 'Income Features', pscales = 0, axis.line.tck = 0)
+
+```
+
 
 
 ```{r include=FALSE}
