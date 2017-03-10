@@ -515,14 +515,17 @@ These two opposing factors impact the maximum profit.  The maximum profit for ea
 * k = 50 | $11,114.00
 * k = 100 | $11,154.00
 
+Interestingly, even though the k=100 model is over-predicting the responders by a wide amount, it still produces the largest profit.  However, all of these models are worse than the LDA, QDA, and Logistic Regression model.  It would appear that this model is not best suited for this feature set.
+
+Next we will attempt some tree-based predictions that will attempt to model the classification through splitting the data set based on the features that produce the best improvement in classification. 
+
+## Random Forest Classification
+
 
 
 ```{r include=FALSE}
 
-profit.lr <- cumsum(14.5*c.valid[order(post.valid.lr, decreasing=T)]-2)
-plot(profit.lr, main="Profit by Circulation") 
-n.mail.valid.lr <- which.max(profit.lr) 
-c(n.mail.valid.lr, max(profit.lr)) 
+
 
 ```
 
