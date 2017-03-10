@@ -410,6 +410,46 @@ As we pointed out above, we are only mailing 1,285 potential donors, but we are 
 
 $$14.5* 950 (Responders) - 2* 1285 (Total Mail Circulation) = 11,205 (Profit)$$
 
+## Logistic Regression
+
+Logistic regression is one of the most common and widely used techniques for classification.  It's an expansion of linear regression, but the function is constrained to predictions (which are probabilities) between 0 and 1 through the sigmoid function.  (Section 4.3, James, Witten, Hastie, Tibshirani)  Logistic regression models conditional distribution of Y, which is slightly different than LDA and QDA which model each reponse class seperately.
+
+
+```{r include=FALSE}
+
+model.lr <- glm(donr ~ reg1 + reg2 + reg3 + reg4 + home + chld + hinc + genf + wrat + avhv + incm + inca + plow + npro + tgif +
+               lgif + rgif + tdon + tlag + agif + wrat_cat, data = data.train.std.c, family = binomial) 
+
+#creating probability esimates for the validation dataset
+post.valid.lr=predict(model.lr,data.valid.std.c,type="response")
+
+pred <- prediction(post.valid.lr,data.valid.std.c$donr)
+perf <- performance(pred,"tpr","fpr")
+plot(perf, main ="ROC Curve for Logistic Regression")
+
+```
+
+The model appears to producing very similar results to the QDA and LDA models.  When the distribution of the are assumed to be normal, this is common (Section 4.4, James, Witten, Hastie, Tibshirani)
+
+```{r include=FALSE}
+# calculate ordered profit function using average donation = $14.50 and mailing cost = $2
+profit.lr <- cumsum(14.5*c.valid[order(post.valid.lr, decreasing=T)]-2)
+plot(profit.lr, main="Profit by Circulation") 
+n.mail.valid.lr <- which.max(profit.lr) 
+c(n.mail.valid.lr, max(profit.lr)) 
+```
+
+The logistic model produces a maximum profit slightly higher than the other models at $11,390.50 and a circulation of 1446.  This is telling us that this model does a better job at recall the positive responses, which is the objective of the model and the way in which it produces higher profit since the benefit outweighs the cost (14.50 > 2.00)
+
+```{r include=FALSE}
+cutoff.lr <- sort(post.valid.lr, decreasing=T)[n.mail.valid.lr+1] # set cutoff based on n.mail.valid
+chat.valid.lr <- ifelse(post.valid.lr>cutoff.lr, 1, 0) # mail to everyone above the cutoff
+table(chat.valid.lr, c.valid) # classification table
+```
+
+As we suspected, this model generates more responders than either of the models at 985.  It does achieve this at quite a bit more circulation, but the benefit exceed the costs.
+
+$$14.5* 985 (Responders) - 2* 1446(Total Mail Circulation) = 11,390.50 (Profit)$$
 
 ```{r include=FALSE}
 
