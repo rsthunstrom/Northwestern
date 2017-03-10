@@ -115,19 +115,192 @@ splom(data.training[c(9, 10, 11, 12, 13, 22)], main = 'Income Features', pscales
 
 ```
 
+Examining the top line of the scatterplot matrix we can see how each of the income features impact the donation amount.  It's fairly obvious from this graphic that average home value in neighborhood, average income, and median income in potential donor's neighborhood have a very similar relationship with the donation amount.  The thickness of the amount of 0 donations in each of these feature's grid also tells us that there are a similar amount of non-donors in each of these features as well.  Interestingly, the wealth rating appears to have a slightly different relationship with donation amount telling us that some combination of wealth and income features would be the predictive.  
 
+Historically, income or currency related features tend to have a positive skew, so let's examine them singularly to see if we need to transform them to make them behave more "normal.  Below is a density plot of median income.
 
 ```{r include=FALSE}
-mylm<- lm(damt ~ chld, data = data.training)
-reg_line<- mylm$coefficients
 
-plot(x = data.training$chld, y = data.training$damt, xlab = "# - Children", ylab = "Donation Amount - $", main = "Donation Amount x Children in Household")
-abline(reg_line, col = "green")
-grid()
-
-print (reg_line)
+densityplot(~data.training$incm, 
+  	main="Density Plot", 
+  	xlab="Median Income")
 
 ```
+
+
+Clearly, we are seeing some skew with this distribution as evidenced by the fat tails on the far left.  Typically a log transformation can take of this type of skewness.  Let's transform each of the income features with a log to verify that we have a created a more normal distribution which will be beneficial for our modeling.
+
+```{r include=FALSE}
+
+densityplot(~log(data.training$incm), 
+  	main="log(incm)", 
+  	xlab="Median Income")
+
+densityplot(~log(data.training$inca), 
+  	main="log(inca)", 
+  	xlab="Average Income")
+
+densityplot(~log(data.training$avhv), 
+  	main="log(avhv)", 
+  	xlab="Average Home Value")
+
+densityplot(~log(data.training$plow), 
+  	main="log(plow)", 
+  	xlab="Percentage of Low Income")
+
+```
+
+The transformations appear to be creating much better distributions for use in our models, as normal distributions behave better in regression modeling.  
+
+Much like the income grouping of features there are several features in regards to past donation histroy.  Let's examine them together to see if they too are possibly providing redundant information.  
+
+```{r include=FALSE}
+
+splom(data.training[c(15, 16, 17, 18, 19, 20, 22)], main = 'Donation Features', pscales = 0, axis.line.tck = 0)
+
+```
+
+It appears that the features related to donation amounts have similar charecterisitcs and the feature related to timing of donations are similar.  Let's split them up and look at them seperately.  
+
+```{r include=FALSE}
+
+splom(data.training[c(15, 16, 17, 20, 22)], main = 'Dollar Donation Features', pscales = 0, axis.line.tck = 0)
+splom(data.training[c(18, 19, 22)], main = 'Timing Donation Features', pscales = 0, axis.line.tck = 0)
+
+```
+
+Seperating out the timing and dollar donations features we can see two different relationships forming with donation amount.  It would be reasonable to assume that we would like to have some aspect of timing and amount in our modeling; and since the features in these two buckets are very similar we most likely do not need to include all of them.
+
+Let's examing the dollar donation features to see if we need to transform them like we did with the other currency related features.
+
+```{r include=FALSE}
+
+densityplot(~data.training$tgif, 
+  	main="Density Plot", 
+  	xlab="Donation amount to Date")
+
+```
+
+As we saw before with the currency based features, we notice a large skew and a fat tail on the right of the distribution.  Let's see if we can acheive the same dynamic we did before with a log transformation.
+
+```{r include=FALSE}
+
+densityplot(~log(data.training$tgif), 
+  	main="log(tgif)", 
+  	xlab="Lifetime Donations")
+
+densityplot(~log(data.training$lgif), 
+  	main="log(lgif)", 
+  	xlab="Largest Donation")
+
+densityplot(~log(data.training$rgif), 
+  	main="log(rgif)", 
+  	xlab="Recent Donation")
+
+densityplot(~log(data.training$agif), 
+  	main="log(agif)", 
+  	xlab="Average Donation")
+
+```
+
+Again, it looks like this log transformation will be beneficial as it's creating a more normal distibution.  
+
+The last feature we will examine is the number of children in household.  If we remember from our correlogram, this feature was the most negatively correlated with donation amount, telling us that there appears to be a relationship between the two that could be beneficial in our prediction. 
+
+```{r include=FALSE}
+
+densityplot(~data.training$damt|as.factor(data.training$chld), 
+  	main="Density Plot by Number of Children",
+   xlab="Donation Amount",
+   layout=c(2,3))
+
+```
+
+It's clear from this graphic that there is an inverse relationship with donation amount and number of children in household, just as the correlation suggested.  The density plots for potential donors with 0 and 5 kids seem to be almost exactly opposite.  This is providing very strong evidence that the number of children in the household will be very useful in predicting not only a donor, but the amount of donation. 
+
+Summarizng the learnings from our EDA are as follows:
+
+* Home-owners historically have donated more than non-home owners
+* Wealth rating has a strong relationship with donation amount
+* Wealth rating appears to be broken into two groups, low (0, 1) and high (2-9)
+* All income features have a similar relationship with donation amount
+* Transforming income features with logs makes them more normal due to their positive skewness
+* Past donation behavior is grouped into two buckets, dollar amount and timing
+* Dollar donations features benefit from log transformations
+* Number of children in the household is negatively correlated with donation amount
+
+### Feature Transformation
+
+Before we start modeling, we need to incorporate the learnings from the EDA we just performed.  First we will created a binary feature for wealth, indicating high or low income.
+
+```{r include=FALSE}
+
+wrat_cat<- as.numeric(ifelse(charity$wrat <= 1, 0, 1))
+charity2<- cbind(charity, wrat_cat)
+plot(x = charity2$wrat_cat, charity2$wrat)
+
+```
+
+We are creating this indicator variable because we saw that potential donors with wealth rating of 0 and 1 behaved similar and those that had ratings of 2+ were also similar.  This added feature is created a slightly different interpretation of wealth which might be more predictive.  
+
+Next we need to use a log transformation on all of the income features and dollar donations.
+
+```{r include=FALSE}
+
+charity.f<- charity2
+charity.f$incm <- log(charity2$incm)
+charity.f$inca <- log(charity2$inca)
+charity.f$avhv <- log(charity2$avhv)
+charity.f$tgif <- log(charity2$tgif)
+charity.f$lgif <- log(charity2$lgif)
+charity.f$rgif <- log(charity2$rgif)
+charity.f$agif <- log(charity2$agif)
+
+```
+
+Now that we have our features transformed, we can create our final training, validation, and testing datasets to be used for modeling.  Through this process we will seperate our predictor variables from our response variable.  Additionally, we will scale the features so that they are providing an equal weight to the model predictions. 
+
+```{r include=FALSE}
+
+data.train <- charity.f[charity.f$part=="train",]
+summary(data.train['part'])
+x.train <- data.train[,c(2:21,25)]
+c.train <- data.train[,22] # donr
+n.train.c <- length(c.train) # 3984
+y.train <- data.train[c.train==1,23] # damt for observations with donr=1
+n.train.y <- length(y.train) # 1995
+
+data.valid <- charity.f[charity.f$part=="valid",]
+x.valid <- data.valid[,c(2:21,25)]
+c.valid <- data.valid[,22] # donr
+n.valid.c <- length(c.valid) # 2018
+y.valid <- data.valid[c.valid==1,23] # damt for observations with donr=1
+n.valid.y <- length(y.valid) # 999
+
+data.test <- charity.f[charity.f$part=="test",]
+n.test <- dim(data.test)[1] # 2007
+x.test <- data.test[,c(2:21, 25)]
+
+
+x.train.mean <- apply(x.train, 2, mean)
+x.train.sd <- apply(x.train, 2, sd)
+x.train.std <- t((t(x.train)-x.train.mean)/x.train.sd) # standardize to have zero mean and unit sd
+apply(x.train.std, 2, mean) # check zero mean
+apply(x.train.std, 2, sd) # check unit sd
+data.train.std.c <- data.frame(x.train.std, donr=c.train) # to classify donr
+data.train.std.y <- data.frame(x.train.std[c.train==1,], damt=y.train) # to predict damt when donr=1
+
+x.valid.std <- t((t(x.valid)-x.train.mean)/x.train.sd) # standardize using training mean and sd
+data.valid.std.c <- data.frame(x.valid.std, donr=c.valid) # to classify donr
+data.valid.std.y <- data.frame(x.valid.std[c.valid==1,], damt=y.valid) # to predict damt when donr=1
+
+x.test.std <- t((t(x.test)-x.train.mean)/x.train.sd) # standardize using training mean and sd
+data.test.std <- data.frame(x.test.std)
+
+```
+
+## Classification Model
+
 # OBJECTIVE: A charitable organization wishes to develop a machine learning
 # model to improve the cost-effectiveness of their direct marketing campaigns
 # to previous donors.
