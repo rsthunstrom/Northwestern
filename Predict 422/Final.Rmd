@@ -312,9 +312,9 @@ The first aspect of the analysis for the charitable organizations is to predict 
 
 In order to evaluate which model is optimal we will calculate the maximum profit produce given the classification model.  The maximum profit is defined as the value for i for which the following formula is maximized:
 
-$$\sum_{i=1}^n 14.5*Pr - 2$$
+$$14.5*Responders - 2*Total Mail Circulation$$
 
-The average donation from someone contacted with the direct marketing is \$14.50, and the cost of each mailing is \$2.00.  As we iterate through our potential donors, the function will reach a maximum at some value of i, or some circulation.  To optimize the function we need to do a good job at predicting responders, and generating high posterior probabilities.  These high probabilities will result in more benefit (14.5 \* 0.99 vs. 14.5 \* 0.50) as we will only mail the potential donors with a high probability to respond and we won't "waste" circulation on those that are not going to donate.
+The average donation from someone contacted with the direct marketing is \$14.50, and the cost of each mailing is \$2.00.  As we iterate through our potential donors, the function will reach a maximum at some value of i, or some circulation.  To optimize the function we need to do a good job at predicting responders, and generating high posterior probabilities.  The more responders when we get as a % of out total mail circulation will produce higher profits, so it's vital to get the highest response rate as possible.
 
 ### Linear Discriminant Analysis (LDA)
 
@@ -355,20 +355,19 @@ c(n.mail.valid, max(profit.lda1))
 
 ```
 
+The maximum profit for the LDA model is $11,355.50 acheived by mailing the first 1391 potential donors of the total 2018 in the validation dataset. The graph does a great job at visualizing the maximum profit.  The profit is steadily rising until we hit the 1,391st potential donor, then it starts to drop telling us that any mailing past that point is a waste.
+
+The 1,391st observation is the cutoff and we will mail to everyone up to that value.  As a result, we will have a certain number of donor responses and non-responses.  Those that respond will produce 14.50 of donations and then we will subtract the total mailing cost from everyone that was mailed to arrive at profit. 
+
 ```{r include=FALSE}
 cutoff.lda1 <- sort(post.valid.lda1, decreasing=T)[n.mail.valid+1] # set cutoff based on n.mail.valid
 chat.valid.lda1 <- ifelse(post.valid.lda1>cutoff.lda1, 1, 0) # mail to everyone above the cutoff
 table(chat.valid.lda1, c.valid) # classification table
-#               c.valid
-#chat.valid.lda1   0   1
-#              0 675  14
-#              1 344 985
-# check n.mail.valid = 344+985 = 1329
-# check profit = 14.5*985-2*1329 = 11624.5
-
-
-
 ```
+
+Observing the chart we see that we mail everyone that gets a predicted label of 1 (416 + 975 = 1391) and we get a donation from 975.  As a result the profit is:
+
+$$14.5* 975 (Responders) - 2* 1391 (Total Mail Circulation) = 11,355.50 (Profit)$$
 
 ```{r include=FALSE}
 
