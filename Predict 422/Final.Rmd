@@ -306,9 +306,9 @@ The first aspect of the analysis for the charitable organizations is to predict 
 * Quadractic Discriminant Analysis
 * Logistic Regression
 * k-NN Classification
-* Support Vector Machine Classification
 * Random Forest Classification
 * Gradient Boosted Decision Trees
+* Support Vector Machine Classification
 
 In order to evaluate which model is optimal we will calculate the maximum profit produce given the classification model.  The maximum profit is defined as the value for i for which the following formula is maximized:
 
@@ -451,15 +451,78 @@ As we suspected, this model generates more responders than either of the models 
 
 $$14.5* 985 (Responders) - 2* 1446(Total Mail Circulation) = 11,390.50 (Profit)$$
 
+Next we will attempt a non-parametric approach to classification.  
+
+### k-Nearest Neighbors Classification (KNN)
+
+The KNN classification approach is very flexible and as such must be used carefully.  KNN iterates through a set of training data and finds the k nearest neighbors. Once the k neighbors have been identified, it applies bayes rule to classifiy a test observation with the largest class probability.  Since the value of k is complete heuristic and up to the analyst, we must be careful to validate the value of k that we use.  
+
 ```{r include=FALSE}
+data.train.std.c
+library(class)
+data.train.std.knn <- subset(data.train.std.c, select = -c(donr))
+data.valid.std.knn <- subset(data.valid.std.c, select = -c(donr))
 
+knn.pred1=knn(data.train.std.knn,data.valid.std.knn,data.train.std.c$donr,k=1, prob = TRUE)
+table(knn.pred1,data.valid.std.c$donr)
 
+knn.pred3=knn(data.train.std.knn,data.valid.std.knn,data.train.std.c$donr,k=3, prob = TRUE)
+table(knn.pred3,data.valid.std.c$donr)
+
+knn.pred5=knn(data.train.std.knn,data.valid.std.knn,data.train.std.c$donr,k=5, prob = TRUE)
+table(knn.pred5,data.valid.std.c$donr)
+
+knn.pred10=knn(data.train.std.knn,data.valid.std.knn,data.train.std.c$donr,k=10, prob = TRUE)
+table(knn.pred10,data.valid.std.c$donr)
+
+knn.pred50=knn(data.train.std.knn,data.valid.std.knn,data.train.std.c$donr,k=50, prob = TRUE)
+table(knn.pred50,data.valid.std.c$donr)
+
+knn.pred100=knn(data.train.std.knn,data.valid.std.knn,data.train.std.c$donr,k=100, prob = TRUE)
+table(knn.pred100,data.valid.std.c$donr)
 
 ```
 
+
+Assesing a few different values of k, we notice that our prediction accuracy for the responders grows as K grows. 
+
+% of responders predicted 
+
+* k = 1 | 83.38%
+* k = 3 | 89.38%
+* k = 5 | 91.39%
+* k = 10 | 92.79%
+* k = 50 | 95.30%
+* k = 100 | 96.09%
+
+However, even though we are predicting more and more of the responders we are also classify more wrong predictions for responders.  
+
+Responder prediction accuracy
+
+* k = 1 | 74.44%
+* k = 3 | 75.67%
+* k = 5 | 76.03%
+* k = 10 | 75.06%
+* k = 50 | 70.87%
+* k = 100 | 69.41%
+
+These two opposing factors impact the maximum profit.  The maximum profit for each value of k is as follows:
+
+* k = 1 | $9,840.50
+* k = 3 | $10,588.50
+* k = 5 | $10,834.50
+* k = 10 | $10,971.50
+* k = 50 | $11,114.00
+* k = 100 | $11,154.00
+
+
+
 ```{r include=FALSE}
 
-
+profit.lr <- cumsum(14.5*c.valid[order(post.valid.lr, decreasing=T)]-2)
+plot(profit.lr, main="Profit by Circulation") 
+n.mail.valid.lr <- which.max(profit.lr) 
+c(n.mail.valid.lr, max(profit.lr)) 
 
 ```
 
