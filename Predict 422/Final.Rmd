@@ -369,7 +369,71 @@ Observing the chart we see that we mail everyone that gets a predicted label of 
 
 $$14.5* 975 (Responders) - 2* 1391 (Total Mail Circulation) = 11,355.50 (Profit)$$
 
+## Quadractic Discriminant Analysis (QDA)
+
+The next classification model we will explore is a quadractic discriminant analysis.  Much like the name would suggest, it's very similar to the LDA.  The difference is that QDA can generate a non-linear decision boundary (Section 4.4.4, James, Witten, Hastie, Tibshirani)
+
 ```{r include=FALSE}
+
+model.qda1 <- qda(donr ~ reg1 + reg2 + reg3 + reg4 + home + chld + hinc + genf + wrat + 
+                    avhv + incm + inca + plow + npro + tgif + lgif + rgif + tdon + tlag + agif + wrat_cat, 
+                  data.train.std.c, cv = TRUE) 
+
+#creating probability esimates for the validation dataset
+post.valid.qda1 <- predict(model.qda1, data.valid.std.c)$posterior[,2] # n.valid.c post probs
+
+pred <- prediction(post.valid.qda1,data.valid.std.c$donr)
+perf <- performance(pred,"tpr","fpr")
+plot(perf, main ="ROC Curve for QDA")
+
+```
+
+After learning the QDA model, predicting the probabilities, and visualizing these in our ROC curve we notice very similar performance as the LDA model.  
+
+```{r include=FALSE}
+# calculate ordered profit function using average donation = $14.50 and mailing cost = $2
+profit.qda1 <- cumsum(14.5*c.valid[order(post.valid.qda1, decreasing=T)]-2)
+plot(profit.qda1, main="Profit by Circulation") 
+n.mail.valid.qda <- which.max(profit.qda1) 
+c(n.mail.valid.qda, max(profit.qda1)) 
+```
+
+The optimal circulation from the QDA model is slightly smaller than that of the LDA, however the profit is smaller as well.  So even though this model "saves" a little circulation cost, it does a worse job predicting responses so we don't get as many donations in our profit function.
+
+```{r include=FALSE}
+cutoff.qda1 <- sort(post.valid.qda1, decreasing=T)[n.mail.valid.qda+1] # set cutoff based on n.mail.valid
+chat.valid.qda1 <- ifelse(post.valid.qda1>cutoff.qda1, 1, 0) # mail to everyone above the cutoff
+table(chat.valid.qda1, c.valid) # classification table
+```
+
+As we pointed out above, we are only mailing 1,285 potential donors, but we are predicting 25 less donors than the LDA model (950 vs. 975) and as a result are losing out on \$362.50 of donations, but only saving \$212 of mailing cost ((1391 - 1285) * 2).  We are starting to see that prediction of respondents is more important than lower circulation. 
+
+$$14.5* 950 (Responders) - 2* 1285 (Total Mail Circulation) = 11,205 (Profit)$$
+
+
+```{r include=FALSE}
+
+
+
+```
+
+```{r include=FALSE}
+
+
+
+```
+
+
+```{r include=FALSE}
+
+
+
+```
+
+# 2) Develop a prediction model to predict donation amounts for donors - the data
+# for this will consist of the records for donors only.
+
+
 
 pred <- prediction( ROCR.simple$predictions, ROCR.simple$labels )
 pred2 <- prediction(abs(ROCR.simple$predictions + 
@@ -379,13 +443,6 @@ perf <- performance( pred, "tpr", "fpr" )
 perf2 <- performance(pred2, "tpr", "fpr")
 plot( perf, colorize = TRUE)
 plot(perf2, add = TRUE, colorize = TRUE)
-
-```
-# 2) Develop a prediction model to predict donation amounts for donors - the data
-# for this will consist of the records for donors only.
-
-
-
 
 ##### CLASSIFICATION MODELING ######
 
