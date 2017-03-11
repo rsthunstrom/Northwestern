@@ -475,7 +475,6 @@ After completing a cross-validated grid search for lambda, we find that the opti
 valid_x<- model.matrix(donr~ ., data.valid.std.c)[,-1]
 ridge.lr<- glmnet(x,data.train.std.c$donr, family = "binomial", alpha = 0, lambda = 0.0291278)
 pred.ridge.lr=predict(ridge.lr, type = "response", newx=valid_x)
-pred.ridge.lr
 
 predl2 <- prediction(pred.ridge.lr,data.valid.std.c$donr)
 perfl2 <- performance(predl2,"tpr","fpr")
@@ -483,7 +482,7 @@ plot(perfl2, main ="ROC Curve for Logistic Regression | L2")
 
 ```
 
-A very similar ROC curve ensues, but we have acheived our highest profit total so far, albeit it only by a small margin.  
+A very similar ROC curve to the traditional logistic regression model ensues.  Let's see how these predictions are impacting our maximum profit.
 
 ```{r include=FALSE}
 # calculate ordered profit function using average donation = $14.50 and mailing cost = $2
@@ -514,7 +513,7 @@ lr_est
 ```
 
 Feature | Logistic Regression with L2 | Logistic Regression
---------|------------|---------------
+:-------|:------------|:---------------
 reg1    |  0.25537000 | 0.56747345
 reg2    |  0.66468907 | 1.21837833
 reg3    | -0.08166385 | 0.01994871
@@ -538,6 +537,93 @@ agif    |  0.03652890 | 0.11737867
 wrat_cat | 0.25527698 | 0.38291831
 
 Comparing the matrix from the L2 logistic regression we can see this shrinking effect as all of the coefficients are smaller than the estimates from the traditional logistic regression.  
+
+
+
+### Logistic Regression | L1 Regularization
+
+Much like the L2 penalty for logistic regression that we just examined, the L1,  or lasso, regularization is another attempt at introducing a penalty to the feature set.  This penalty however is slightly different, as it doesn't just shrink the coefficients but it has the ability to zero out the estimates entirely and perform a type of feature selection.  This type of regularization can be particularly useful for models where only a few features are explaining the relationship with the response variable.  Just as we saw with the L2 regularization, we need to apply some magnitude of regularization and we do that through lambda again.  Instead of attempting to guess what lambda should be, we perform a cross validated grid search in order to find the optimal value of lambda.
+
+```{r include=FALSE}
+set.seed (1)
+#10-fold cross validated grid search for lambda
+#alpha = 1 for L1/Lasso penalty
+cv.out=cv.glmnet(x,data.train.std.c$donr, type.measure ="deviance", alpha = 1)
+plot(cv.out)
+bestlam=cv.out$lambda.min
+bestlam
+```
+
+We observe the optimal value for lambda after our cross validated grid search is 0.001591041.  This is not a significant amount of regularization, so the majority of the feature set appears to be playing a predictive role.  Next we fit a model with the optimal value of a lambda.
+
+```{r include=FALSE}
+
+lasso.lr<- glmnet(x,data.train.std.c$donr, family = "binomial", alpha = 1, lambda = 0.001591041)
+pred.lasso.lr=predict(lasso.lr, type = "response", newx=valid_x)
+
+predl1 <- prediction(pred.lasso.lr,data.valid.std.c$donr)
+perfl1 <- performance(predl1,"tpr","fpr")
+plot(perfl1, main ="ROC Curve for Logistic Regression | L1")
+
+```
+
+Nothing drastically different for this ROC curve, let's see how our profit calculation looks.  Given the fact that this ROC is similar, we should expect the profit to be similar. 
+
+```{r include=FALSE}
+# calculate ordered profit function using average donation = $14.50 and mailing cost = $2
+profit.lr.l1 <- cumsum(14.5*c.valid[order(pred.lasso.lr, decreasing=T)]-2)
+plot(profit.lr.l1, main="Profit by Circulation") 
+n.mail.valid.lr.l1 <- which.max(profit.lr.l1) 
+c(n.mail.valid.lr.l1, max(profit.lr.l1)) 
+```
+
+
+```{r include=FALSE}
+cutoff.lr.l1 <- sort(pred.lasso.lr, decreasing=T)[n.mail.valid.lr.l1+1] # set cutoff based on n.mail.valid
+chat.valid.lr.l1 <- ifelse(pred.lasso.lr>cutoff.lr.l1, 1, 0) # mail to everyone above the cutoff
+table(chat.valid.lr.l1, c.valid) # classification table
+```
+
+The profit here is slightly worst, not because we couldn't predict responders, but because we took more circulation to do it.  We had a clue that this performance would be slightly worse when we ran our cross validation for lambda.  Since lambda was very small, we were applying very little regularization which would be a clue to us that a lot of the features need to play a role in the prediction.  As such, whenever the majority of th feature set explains the behavior of the response, the L2 regularization will outperform the L1 regularization. 
+
+$$14.5* 975 (Responders) - 2* 1379(Total Mail Circulation) = 11,379.50 (Profit)$$
+
+Lastly, let's compare the coefficients from this model and compare them to the traditional logistic regression model and logistic regression model with L2 regularization.
+
+```{r include=FALSE}
+lasso_est<- lasso.lr$beta
+lasso_est
+
+```
+
+Feature | Logistic Regression with L2 | Logistic Regression | Logistic Regression with L1
+:-------|:----------------------------|:--------------------|:----------------------------
+reg1    |  0.25537000 | 0.56747345 | 0.520325884
+reg2    |  0.66468907 | 1.21837833 | 1.146254944
+reg3    | -0.08166385 | 0.01994871 | NA
+reg4    | -0.10824003 | -0.0162182 | -0.018568756
+home    |  0.66893955 | 1.12342549 | 1.063425157
+chld    | -1.27598357 | -1.96467845 | -1.887569094
+hinc    |  0.04977427 | 0.08435657 | 0.064668501
+genf    | -0.02246717 | -0.02701978 | -0.012185088
+wrat    |  0.44190367 | 0.69142161 | 0.662406042
+avhv    |  0.04591216 | 0.07088138 | 0.062916663
+incm    |  0.23463216 | 0.4747874 | 0.457648174
+inca    |  0.07581667 | 0.03390637 | 0.031112682
+plow    | -0.07537793 | -0.01545116 | -0.009518454
+npro    |  0.13689277 | 0.09650472 | 0.097311631
+tgif    |  0.24010934 | 0.44076473 | 0.406723055
+lgif    | -0.02583325 | -0.12747192 | -0.054159546
+rgif    | -0.02295262 | -0.02695524 | NA
+tdon    | -0.16685811 | -0.23556973 | -0.215066455
+tlag    | -0.29920010 | -0.45919368 | -0.431476075
+agif    |  0.03652890 | 0.11737867 | 0.023587496
+wrat_cat | 0.25527698 | 0.38291831 | 0.335687103
+
+Observing the L1 estimates we see that two of the features we're shrunk all the way to 0 and reduced the dimensions of our model by 2.  This model was slightly worse performing than the other two versions of logistic regression most likely because it appears that the majority of features are providing some predictive benefit.  
+
+Next we will explore a non-parametric approach to classification, k-Nearest Neighbors.
+
 ### k-Nearest Neighbors Classification (KNN)
 
 The KNN classification approach is very flexible and as such must be used carefully.  KNN iterates through a set of training data and finds the k nearest neighbors. Once the k neighbors have been identified, it applies bayes rule to classifiy a test observation with the largest class probability.  Since the value of k is complete heuristic and up to the analyst, we must be careful to validate the value of k that we use.  
