@@ -513,8 +513,8 @@ ridge_est
 lr_est
 ```
 
-Feature | Logistic Regression | L2 | Logistic Regression
-:------|:------------|:---------------
+Feature | Logistic Regression with L2 | Logistic Regression
+--------|------------|---------------
 reg1    |  0.25537000 | 0.56747345
 reg2    |  0.66468907 | 1.21837833
 reg3    | -0.08166385 | 0.01994871
