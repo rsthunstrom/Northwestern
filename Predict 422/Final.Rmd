@@ -713,12 +713,7 @@ plot(perfrf, main ="ROC Curve for Random Forest")
 It appears that the ROC curve for the random forest is pulled slightly to the upper left portion of the graph, indicating better predictive performane.  Let's plot our best logistic regression curve on the same plot (in a red line) and see how they compare.
 
 ```{r include=FALSE}
-pred <- prediction( ROCR.simple$predictions, ROCR.simple$labels )
-pred2 <- prediction(abs(ROCR.simple$predictions + 
-                        rnorm(length(ROCR.simple$predictions), 0, 0.1)), 
-        ROCR.simple$labels)
-perf <- performance( pred, "tpr", "fpr" )
-perf2 <- performance(pred2, "tpr", "fpr")
+
 plot(perfl2, main = "ROC Curve for Logistic Regression | L2 and Random Forest", col = 'red')
 plot(perfrf, add = TRUE)
 
@@ -740,36 +735,240 @@ chat.valid.rf <- ifelse(pred.rf[,2]>cutoff.rf, 1, 0) # mail to everyone above th
 table(chat.valid.rf, c.valid) # classification table
 ```
 
-It's obvious to see that the performance of this model is significantly better.  We achieve the highest profit so far by a wide margin, at $11,790.  This is because we can predict basically the same amount of responders, 979 of them, with significantly less circulation.  
+It's obvious to see that the performance of this model is significantly better.  We achieve the highest profit so far by a wide margin, at $11,770.5.  This is because we can predict basically the same amount of responders, 985 of them, with significantly less circulation, only need 1256 mailings. 
 
-$$14.5* 979 (Responders) - 2* 1230(Total Mail Circulation) = 11,790.00 (Profit)$$
-One of the nice things about running a random forest is that you can assess which features were on average driving the biggest reduction in node impurity as the trees were built.  This is a powerful clue into which features are the the most predictive.  
+$$14.5* 985 (Responders) - 2* 1256(Total Mail Circulation) = 11,770.50 (Profit)$$
+One of the nice things about running a random forest is that you can assess which features were on average driving the biggest reduction in node impurity as the trees were built.  This is a powerful clue into which features are the the most predictive.   
 
 
 ```{r include=FALSE}
 
-#regression column 2 is RSS, classification deviance
-importance (rf.boston)
-
 #plotting feature importance
-varImpPlot (rf.boston)
+varImpPlot (rf)
 
 ```
+
+As we observed with our EDA, children in the household was very detrimental to donations and we can see here that it's clearly the most important feature in predicting donors. 
+
+Another type of decision tree model we can pursue is a gradient boosted tree
+
+### Gradient Boosted Trees (GBM)
+
+As we saw with the random forest, multiple trees were grown from repeated sampling of the dataset.  Boosting takes a slightly different approach where trees are grown sequentially, meaning that they use the previous tree to grow the subsequent tree. Since the trees are grow sequentially, they utilize the residuals from the previous tree and grow "slowly" (Section 8.2.3, James, Witten, Hastie, Tibshirani).
+
+
+```{r include=FALSE}
+
+install.packages("gbm")
+library(gbm)
+set.seed (1)
+boost=gbm.fit(data.train.std.knn, data.train.std.c$donr,distribution="bernoulli",n.trees=1000, interaction.depth=20)
+pred.boost=predict(boost,newdata=data.valid.std.knn, n.trees=100)
+
+predboost <- prediction(pred.boost,data.valid.std.c$donr)
+perfboost <- performance(predboost,"tpr","fpr")
+plot(perfboost, main ="ROC Curve for Gradient Boosted Trees")
+
+```
+
+
+```{r include=FALSE}
+
+plot(perfboost, main = "ROC Curve for Logistic Regression | L2, Random Forest, and GBM", col = 'red')
+plot(perfrf, add = TRUE, col = 'green')
+plot(perfl2, add = TRUE)
+
+```
+
+
+Here we can see that the GBM model is performing slightly better than the logistic regression model and slightly worse than the random forest. We should expect the maximum profit to be in between those two models.
+
+```{r include=FALSE}
+# calculate ordered profit function using average donation = $14.50 and mailing cost = $2
+profit.boost <- cumsum(14.5*c.valid[order(pred.boost, decreasing=T)]-2)
+plot(profit.boost, main="Profit by Circulation") 
+n.mail.valid.boost <- which.max(profit.boost) 
+c(n.mail.valid.boost, max(profit.boost)) 
+```
+
+
+```{r include=FALSE}
+cutoff.boost <- sort(pred.boost, decreasing=T)[n.mail.valid.boost+1] # set cutoff based on n.mail.valid
+chat.valid.boost <- ifelse(pred.boost>cutoff.boost, 1, 0) # mail to everyone above the cutoff
+table(chat.valid.boost, c.valid) # classification table
+```
+
+$$14.5* 995 (Responders) - 2* 1412(Total Mail Circulation) = 11,603.50 (Profit)$$
+
+The GBM is doing a great job at predicting responders, our highest total yet at 995.  However, it comes at a step cost as we need to mail 1,412 potential donors to get those responses.  As a result the total profit is not as high as the random forest which did a better job at optimizing the responders and costs.
+
+
+As we did we the random forest, we can evaluate the feature importance. 
+
+```{r include=FALSE}
+
+#plotting feature importance
+summary(boost)
+
+```
+
+Again we notice a the children in household being a powerful feature to use for donor prediction. 
+
+The last model that we will attempt is a support vector machine.
+
+### Support Vector Machine
+
+The general concept behind a support vector machine is to create a hyperplane that seperates the two classes.  Observations on one side of the hyperplane are a part of one class, and the other side represents the other class.  The observations that form this hyperplane are called the support vectors, and they also form the margin, or gap between the two sets of classes.  It may be desired to define a hyperplane that does not perfectly seperate the classes, as there are dangers of overfitting.  This slack can be introduced in the model which allows for a number of observations to be misclassified.  This is often desirable as it can lead to better performance on different datasets.  In order to identify what this optimal margin should be, we can tune the parameter for margin (cost) with cross fold validation.
+
+```{r include=FALSE}
+library(ROCR)
+library(e1071)
+dat=data.frame(x=data.train.std.knn, y=as.factor(data.train.std.c$donr))
+
+tune.out=tune(svm,y~.,data=dat,kernel="linear",
+                ranges=list(cost=c(0.001, 0.01, 0.1, 1,5,10,100)))
+
+summary(tune.out)
+
+#fit using best model from tune
+bestmod=tune.out$best.model
+summary(bestmod)
+
+```
+
+Now that we have the optimal value the cost, we fit the model and assess the performance on the validation dataset.
+
+```{r include=FALSE}
+testdat=data.frame(x=data.valid.std.knn, y=as.factor(data.valid.std.c$donr))
+
+svmfit=svm(y~., data=testdat, kernel="linear", cost=.01, scale=FALSE, decision.values = T, probability = TRUE)
+fitted=attributes(predict(svmfit,testdat,
+                          decision.values=TRUE))$decision.values
+
+rocplot(fitted, testdat$y, main="Training Data")
+```
+
+This ROC doesn't appear to be as impressive as what we acheived with the random forest or gradient boosted trees.  Let's evaluate the profit and see if our assumptions are correct. 
+
+```{r include=FALSE}
+# calculate ordered profit function using average donation = $14.50 and mailing cost = $2
+profit.svm <- cumsum(14.5*c.valid[order(fitted, decreasing=T)]-2)
+plot(profit.svm, main="Profit by Circulation") 
+n.mail.valid.svm <- which.max(profit.svm) 
+c(n.mail.valid.svm, max(profit.svm)) 
+```
+
+```{r include=FALSE}
+cutoff.svm <- sort(fitted, decreasing=T)[n.mail.valid.svm+1] # set cutoff based on n.mail.valid
+chat.valid.svm <- ifelse(fitted>cutoff.svm, 1, 0) # mail to everyone above the cutoff
+table(chat.valid.svm, c.valid) # classification table
+```
+
+As we suspected, the profit is only $11,373.50 from a circulation quantity of 1,440.  We are able to classify the majority of responders correctly, but we have too many errors which increase our circulation and decrease total profit.
+
+$$14.5* 983 (Responders) - 2* 1440(Total Mail Circulation) = 11,373.50 (Profit)$$
+ypred
+predsvm <- prediction(ypred,testdat$y)
+perfsvm <- performance(predsvm,"tpr","fpr")
+plot(perfsvm, main ="ROC Curve for SVM")
+
+
+#predicting with sub-optimal model C = 0.01
+
+ypred=predict(svmfit ,testdat)
+table(predict=ypred, truth=testdat$y)
+
+pred.svm=attributes(predict(svmfit,dat,
+                          decision.values=TRUE))$decision.values
+rocplot=function(pred, truth, ...) {
+  predob = prediction(pred, truth)
+  perf = performance(predob, "tpr", "fpr")
+  plot(perf, ...)}
+
+pred.svm
+
+
+rocplot(fitted ,dat$y,main="Training Data")
+
+
+#create linearly seperated data for SVM
+x[y==1,]=x[y==1,]+0.5
+plot(x, col=(y+5)/2, pch=19)
+
+#fit SVM with large cost so we get no misclassified obs
+dat=data.frame(x=x,y=as.factor(y))
+svmfit=svm(y~., data=dat, kernel="linear", cost=1)
+summary(svmfit)
+plot(svmfit, dat)
+
+#making the margin so small most likely overfits this data
+#relax cost to make a more optimal/predictive model Cost = 1
+svmfit=svm(y~., data=dat, kernel="linear", cost=1)
+summary(svmfit)
+plot(svmfit ,dat)
+ypred=predict(svmfit ,testdat)
+table(predict=ypred, truth=testdat$y)
+
+svmfit=svm(y~., data=dat[train,], kernel="radial",gamma=2, cost=1)
+plot(svmfit ,dat[train ,])
+
+#tune to find best value for cost
+set.seed (1)
+tune.out=tune(svm, y~., data=dat[train,], kernel="radial",
+                ranges=list(cost=c(0.1,1,10,100,1000),
+                            gamma=c(0.5,1,2,3,4) ))
+summary(tune.out)
+
+#predict test set using best model
+table(true=dat[-train,"y"], 
+      pred=predict(tune.out$best.model, newx=dat[-train ,]))
+
+table(true=dat[-train,"y"], 
+      pred=predict(svmfit,newx=dat[-train ,]))
+
+fitted=attributes(predict(svmfit.opt,dat[train,],
+                          decision.values=TRUE))$decision.values
+
+#use fitted values to plot ROC curve
+par(mfrow=c(1,2))
+rocplot(fitted ,dat[train ,"y"],main="Training Data")
+
+#jack up gamma to increase accuracy on training data
+#need to be cogniziant of this impact on test data, overfit 101
+svmfit.flex=svm(y~., data=dat[train,], kernel="radial", gamma=50, cost=1, 
+                decision.values=T)
+fitted=attributes(predict(svmfit.flex,dat[train,],
+                          decision.values=T))$decision.values
+rocplot(fitted ,dat[train ,"y"],add=T,col="red")
+
+#SVM on test data with RBF
+fitted=attributes(predict(svmfit.opt,dat[-train,],
+                          decision.values=T))$decision.values
+rocplot(fitted,dat[-train,"y"],main="Test Data")
+fitted=attributes(predict(svmfit.flex,dat[-train,],
+                          decision.values=T))$decision.values
+rocplot(fitted,dat[-train,"y"],add=T,col="red")
+
+```
+
 
 # 2) Develop a prediction model to predict donation amounts for donors - the data
 # for this will consist of the records for donors only.
 
+```{r include=FALSE}
 
 
-pred <- prediction( ROCR.simple$predictions, ROCR.simple$labels )
-pred2 <- prediction(abs(ROCR.simple$predictions + 
-                        rnorm(length(ROCR.simple$predictions), 0, 0.1)), 
-        ROCR.simple$labels)
-perf <- performance( pred, "tpr", "fpr" )
-perf2 <- performance(pred2, "tpr", "fpr")
-plot( perf, colorize = TRUE)
-plot(perf2, add = TRUE, colorize = TRUE)
+```
 
+```{r include=FALSE}
+
+
+```
+
+```{r include=FALSE}
+
+
+```
 ##### CLASSIFICATION MODELING ######
 
 # linear discriminant analysis
