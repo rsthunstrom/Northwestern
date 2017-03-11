@@ -692,18 +692,67 @@ Next we will attempt some tree-based predictions that will attempt to model the 
 
 ## Random Forest Classification
 
+An alternative approach to creating classifications is to create a decision tree which splits up the dataset based on the features that do the best job of classifying the observations after the split.  This analysis of the best classification can be done by assess the misclassification in the subsequent groupings after the split, or it can be calculated using some metric of impurity.  The impurity in the nodes after a split is how we will assess our decision trees. 
 
+However simply building one decision tree might not be robust enough to adapt to the complexity of the dataset or the additional datasets for which we wish to generate predictions.  Random forests are a collection of these decision trees and they are created in an interesting way.  Random forests use a technique called bagging, or bootstrap aggregation, which resamples the same dataset repeatedly to generate multiple decision trees.  However, it doesn't just simply re-sample the dataset over and over again, it using a technique called decorrelated bagging in which it forces different features to be removed from the tree building process.  While this might seem strange that features could be removed, especially highly predictive ones, but the benefit of this in tandom with repeated resampling is teasing out smaller effects that would be hidden by building similar trees over and over. The amount of decorrelation is adjusted through the amount of features used in each tree, or m.  The suggested value of m is the square root of p, or the total count of features.  Our feature set is made up of 21 features, so the optimal value for m in our dataset is ~4.58.  As a result, we will set m to 5. 
 
 ```{r include=FALSE}
 
+library(randomForest)
+#random forest with m=5
+rf=randomForest(data.train.std.knn, as.factor(data.train.std.c$donr), mtry=5,prox = TRUE, importance = TRUE)
+pred.rf<- predict(rf, data.valid.std.knn, type = "prob")
+pred.rf[,2]
 
+predrf <- prediction(pred.rf[,2],data.valid.std.c$donr)
+perfrf <- performance(predrf,"tpr","fpr")
+plot(perfrf, main ="ROC Curve for Random Forest")
 
 ```
 
+It appears that the ROC curve for the random forest is pulled slightly to the upper left portion of the graph, indicating better predictive performane.  Let's plot our best logistic regression curve on the same plot (in a red line) and see how they compare.
+
+```{r include=FALSE}
+pred <- prediction( ROCR.simple$predictions, ROCR.simple$labels )
+pred2 <- prediction(abs(ROCR.simple$predictions + 
+                        rnorm(length(ROCR.simple$predictions), 0, 0.1)), 
+        ROCR.simple$labels)
+perf <- performance( pred, "tpr", "fpr" )
+perf2 <- performance(pred2, "tpr", "fpr")
+plot(perfl2, main = "ROC Curve for Logistic Regression | L2 and Random Forest", col = 'red')
+plot(perfrf, add = TRUE)
+
+```
+
+It's clear to see that the random forest is providing a substantial improvement in performance.  Let's calculate the profit from the random forest to see how this increase in accuracy produces a higher profit. 
+
+```{r include=FALSE}
+# calculate ordered profit function using average donation = $14.50 and mailing cost = $2
+profit.rf <- cumsum(14.5*c.valid[order(pred.rf[,2], decreasing=T)]-2)
+plot(profit.rf, main="Profit by Circulation") 
+n.mail.valid.rf <- which.max(profit.rf) 
+c(n.mail.valid.rf, max(profit.rf)) 
+```
+
+```{r include=FALSE}
+cutoff.rf <- sort(pred.rf[,2], decreasing=T)[n.mail.valid.rf+1] # set cutoff based on n.mail.valid
+chat.valid.rf <- ifelse(pred.rf[,2]>cutoff.rf, 1, 0) # mail to everyone above the cutoff
+table(chat.valid.rf, c.valid) # classification table
+```
+
+It's obvious to see that the performance of this model is significantly better.  We achieve the highest profit so far by a wide margin, at $11,790.  This is because we can predict basically the same amount of responders, 979 of them, with significantly less circulation.  
+
+$$14.5* 979 (Responders) - 2* 1230(Total Mail Circulation) = 11,790.00 (Profit)$$
+One of the nice things about running a random forest is that you can assess which features were on average driving the biggest reduction in node impurity as the trees were built.  This is a powerful clue into which features are the the most predictive.  
+
 
 ```{r include=FALSE}
 
+#regression column 2 is RSS, classification deviance
+importance (rf.boston)
 
+#plotting feature importance
+varImpPlot (rf.boston)
 
 ```
 
