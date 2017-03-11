@@ -816,9 +816,11 @@ Again we notice a the children in household being a powerful feature to use for 
 
 The last model that we will attempt is a support vector machine.
 
-### Support Vector Machine
+### Support Vector Machine | Linear
 
 The general concept behind a support vector machine is to create a hyperplane that seperates the two classes.  Observations on one side of the hyperplane are a part of one class, and the other side represents the other class.  The observations that form this hyperplane are called the support vectors, and they also form the margin, or gap between the two sets of classes.  It may be desired to define a hyperplane that does not perfectly seperate the classes, as there are dangers of overfitting.  This slack can be introduced in the model which allows for a number of observations to be misclassified.  This is often desirable as it can lead to better performance on different datasets.  In order to identify what this optimal margin should be, we can tune the parameter for margin (cost) with cross fold validation.
+
+Additionally, there are a number of kernel functions we can use to create our decision boundary and classification.  The first kernel we will use is a linear one, which models a linear decision boundary.
 
 ```{r include=FALSE}
 library(ROCR)
@@ -841,11 +843,11 @@ Now that we have the optimal value the cost, we fit the model and assess the per
 ```{r include=FALSE}
 testdat=data.frame(x=data.valid.std.knn, y=as.factor(data.valid.std.c$donr))
 
-svmfit=svm(y~., data=testdat, kernel="linear", cost=.01, scale=FALSE, decision.values = T, probability = TRUE)
+svmfit=svm(y~., data=testdat, kernel="linear", cost=.01, gamma = 0.04761905, scale=FALSE, decision.values = T, probability = TRUE)
 fitted=attributes(predict(svmfit,testdat,
                           decision.values=TRUE))$decision.values
 
-rocplot(fitted, testdat$y, main="Training Data")
+rocplot(fitted, testdat$y, main="ROC of Linear SVM")
 ```
 
 This ROC doesn't appear to be as impressive as what we acheived with the random forest or gradient boosted trees.  Let's evaluate the profit and see if our assumptions are correct. 
@@ -867,89 +869,84 @@ table(chat.valid.svm, c.valid) # classification table
 As we suspected, the profit is only $11,373.50 from a circulation quantity of 1,440.  We are able to classify the majority of responders correctly, but we have too many errors which increase our circulation and decrease total profit.
 
 $$14.5* 983 (Responders) - 2* 1440(Total Mail Circulation) = 11,373.50 (Profit)$$
-ypred
-predsvm <- prediction(ypred,testdat$y)
-perfsvm <- performance(predsvm,"tpr","fpr")
-plot(perfsvm, main ="ROC Curve for SVM")
 
+Next let's create a support vector machine with a differnt kernel, one that allows for non-linear decision boundaries.  The kernel we will use next is the RBF, or radial basis function. 
 
-#predicting with sub-optimal model C = 0.01
+### Support Vector Machine | Radial Basis Function (RBF)
 
-ypred=predict(svmfit ,testdat)
-table(predict=ypred, truth=testdat$y)
+```{r include=FALSE}
 
-pred.svm=attributes(predict(svmfit,dat,
-                          decision.values=TRUE))$decision.values
-rocplot=function(pred, truth, ...) {
-  predob = prediction(pred, truth)
-  perf = performance(predob, "tpr", "fpr")
-  plot(perf, ...)}
+tune.out.rbf=tune(svm,y~.,data=dat,kernel="radial",
+                ranges=list(cost=c(0.001, 0.01, 0.1, 1,5,10,100)))
 
-pred.svm
+summary(tune.out.rbf)
 
-
-rocplot(fitted ,dat$y,main="Training Data")
-
-
-#create linearly seperated data for SVM
-x[y==1,]=x[y==1,]+0.5
-plot(x, col=(y+5)/2, pch=19)
-
-#fit SVM with large cost so we get no misclassified obs
-dat=data.frame(x=x,y=as.factor(y))
-svmfit=svm(y~., data=dat, kernel="linear", cost=1)
-summary(svmfit)
-plot(svmfit, dat)
-
-#making the margin so small most likely overfits this data
-#relax cost to make a more optimal/predictive model Cost = 1
-svmfit=svm(y~., data=dat, kernel="linear", cost=1)
-summary(svmfit)
-plot(svmfit ,dat)
-ypred=predict(svmfit ,testdat)
-table(predict=ypred, truth=testdat$y)
-
-svmfit=svm(y~., data=dat[train,], kernel="radial",gamma=2, cost=1)
-plot(svmfit ,dat[train ,])
-
-#tune to find best value for cost
-set.seed (1)
-tune.out=tune(svm, y~., data=dat[train,], kernel="radial",
-                ranges=list(cost=c(0.1,1,10,100,1000),
-                            gamma=c(0.5,1,2,3,4) ))
-summary(tune.out)
-
-#predict test set using best model
-table(true=dat[-train,"y"], 
-      pred=predict(tune.out$best.model, newx=dat[-train ,]))
-
-table(true=dat[-train,"y"], 
-      pred=predict(svmfit,newx=dat[-train ,]))
-
-fitted=attributes(predict(svmfit.opt,dat[train,],
-                          decision.values=TRUE))$decision.values
-
-#use fitted values to plot ROC curve
-par(mfrow=c(1,2))
-rocplot(fitted ,dat[train ,"y"],main="Training Data")
-
-#jack up gamma to increase accuracy on training data
-#need to be cogniziant of this impact on test data, overfit 101
-svmfit.flex=svm(y~., data=dat[train,], kernel="radial", gamma=50, cost=1, 
-                decision.values=T)
-fitted=attributes(predict(svmfit.flex,dat[train,],
-                          decision.values=T))$decision.values
-rocplot(fitted ,dat[train ,"y"],add=T,col="red")
-
-#SVM on test data with RBF
-fitted=attributes(predict(svmfit.opt,dat[-train,],
-                          decision.values=T))$decision.values
-rocplot(fitted,dat[-train,"y"],main="Test Data")
-fitted=attributes(predict(svmfit.flex,dat[-train,],
-                          decision.values=T))$decision.values
-rocplot(fitted,dat[-train,"y"],add=T,col="red")
+#fit using best model from tune
+bestmod.rbf=tune.out.rbf$best.model
+summary(bestmod.rbf)
 
 ```
+
+```{r include=FALSE}
+
+svmfit.rbf=svm(y~., data=testdat, kernel="radial", cost=5, gamma = 0.04761905, scale=FALSE, decision.values = T, probability = TRUE)
+fitted.rbf=attributes(predict(svmfit.rbf,testdat,
+                          decision.values=TRUE))$decision.values
+
+rocplot(fitted.rbf, testdat$y, main="ROC of RBF SVM")
+```
+
+This ROC is very promising as we notice a strong pull to the upper left portion of the graph. Let's compare this to the best model we have had so far, the random forest model.
+
+```{r include=FALSE}
+rocplot(fitted.rbf, testdat$y, main="ROC of RBF SVM and Random Forest", col = 'red')
+plot(perfrf, add = TRUE)
+```
+
+Visually we can see superior performance for the SVM with RBF kernel.  With this type of increase in prediction performance, we would expect significantly better maximum profit.
+
+```{r include=FALSE}
+# calculate ordered profit function using average donation = $14.50 and mailing cost = $2
+profit.svm.rbf <- cumsum(14.5*c.valid[order(fitted.rbf, decreasing=T)]-2)
+plot(profit.svm.rbf, main="Profit by Circulation") 
+n.mail.valid.svm.rbf <- which.max(profit.svm.rbf) 
+c(n.mail.valid.svm.rbf, max(profit.svm.rbf)) 
+```
+
+
+```{r include=FALSE}
+cutoff.svm.rbf <- sort(fitted.rbf, decreasing=T)[n.mail.valid.svm.rbf+1] # set cutoff based on n.mail.valid
+chat.valid.svm.rbf <- ifelse(fitted.rbf>cutoff.svm.rbf, 1, 0) # mail to everyone above the cutoff
+table(chat.valid.svm.rbf, c.valid) # classification table
+```
+
+$$14.5* 992 (Responders) - 2* 1124(Total Mail Circulation) = 12,136 (Profit)$$
+
+The SVM with RBF kernel does a tremendoes job at predicting response and does it very accurately.  As a result, we get the majority of the responders and don't waste a lot of circulation.  This is evidence by the largest profit we have attained thus far. 
+
+### Classification Summary
+
+The criteria for which we are going to evaluate all of the classification models is to see which model produces the highest profit on the validation dataset.  Listed below are the profit values for each of the models:
+
+Model | Profit
+:---------------------|:------------------------:
+SVM, Radial Basis Function | $12,136.00
+Random Forest | 11,770.50
+Gradient Boosted Trees | 11,603.50
+Logsitic Regression, L2 Regularization | 11,393
+Logistic Regression | 11,390.50
+Logsitic Regression, L1 Regularization | 11,379.50
+SVM, Linear | 11,373.50
+Linear Discriminant Analysis | 11,355.50
+Quadractic Discriminant Analysis | 11,205
+k-NN Classification | $11,154.00
+
+The choice is an easy one here, as the SVM, radial basis function outperforms all of the models by a significant amount.  The rest of the models perform similarly the the exception of the k-NN classification and QDA. 
+
+Now that we have created our classification model for predicting those that will donate, next we will create a model to predict the amount of donations for those that donate.
+
+## Prediction Model
+
 
 
 # 2) Develop a prediction model to predict donation amounts for donors - the data
