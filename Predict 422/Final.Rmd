@@ -931,14 +931,14 @@ The criteria for which we are going to evaluate all of the classification models
 Model | Profit
 :---------------------|:------------------------:
 SVM, Radial Basis Function | $12,136.00
-Random Forest | 11,770.50
-Gradient Boosted Trees | 11,603.50
-Logsitic Regression, L2 Regularization | 11,393
-Logistic Regression | 11,390.50
-Logsitic Regression, L1 Regularization | 11,379.50
-SVM, Linear | 11,373.50
-Linear Discriminant Analysis | 11,355.50
-Quadractic Discriminant Analysis | 11,205
+Random Forest | $11,770.50
+Gradient Boosted Trees | $11,603.50
+Logsitic Regression, L2 Regularization | $11,393
+Logistic Regression | $11,390.50
+Logsitic Regression, L1 Regularization | $11,379.50
+SVM, Linear | $11,373.50
+Linear Discriminant Analysis | $11,355.50
+Quadractic Discriminant Analysis | $11,205
 k-NN Classification | $11,154.00
 
 The choice is an easy one here, as the SVM, radial basis function outperforms all of the models by a significant amount.  The rest of the models perform similarly the the exception of the k-NN classification and QDA. 
@@ -947,114 +947,128 @@ Now that we have created our classification model for predicting those that will
 
 ## Prediction Model
 
+There are a variety of different models developed that can be used to predict a quantitative variable, and in our case that is the donation amount.  We will develop the following models for our prediction of donation amount: 
+
+* Linear Regression
+* Linear Regression | Best Subset Model
+* Linear Regression | L2 Regularization
+* Linear Regression | L1 Regularization
+* Principal Components Regression
+* Random Forest Regression
+* Gradient Boosted Tree Regression
+
+As we did with the classification models, we will learn the models on our training dataset and predict values on our validation dataset.  We will use the mean squared error of the validation dataset in order to rank which models perform the best. 
+
+### Linear Regression
+
+Linear regression is one of the most popular and commonly used techniques to predict quantitative values.  We use a technique called ordinary least squares where we fit a linear line that produces the lowest total value of the squared value of each observation distance from our line.  This technique is reliant on a variety of assumptions and hence can be very robust when those assumptions are met, and not reliable when they are not.  
+
+```{r include=FALSE}
+
+#Fit an OLS regression model
+model.lm <- lm(damt ~ reg1 + reg2 + reg3 + reg4 + home + chld + hinc + genf + 
+                  avhv + incm + inca + plow + npro + tgif + lgif + rgif + tdon + tlag + agif + wrat, 
+                data.train.std.y)
+
+pred.valid.lm <- predict(model.lm, newdata = data.valid.std.y) # validation predictions
+
+mean((y.valid - pred.valid.lm)^2) # mean prediction error
+
+sd((y.valid - pred.valid.lm)^2)/sqrt(n.valid.y) # std error
 
 
-# 2) Develop a prediction model to predict donation amounts for donors - the data
-# for this will consist of the records for donors only.
+```
+
+Fitting a linear regression model on the training dataset and predicting donation amount of the validation dataset, we find a mean prediction error of 1.5564 and a standard error of our predictions is 0.161215.  The standard error of our predictions is helpful in identifying how accurate our predictions are.  For example if we over predict and under predict wildly, the mean squared error might not give us this insight if they cancel each other out.  Using the standard error helps evalaute how tight the prediction bands are.
+
+As we mentioned earlier, linear regression is robust if the assumptions are met.  In order to meet the assumptions our residuals need to be independently and identically distributed.  So we can plot our residuals against our fitted values to see if this is the case.  
+
+```{r include=FALSE}
+
+layout(matrix(c(1,2,3,4),2,2)) # optional 4 graphs/page 
+plot(model.lm)
+```
+
+The graphic in the upper right is showing us that for the most part, the residuals are random and we are seeing no pattern.  The QQ plot confirms this, but we do see some skewness as the residuals are not all following on the dotted line.  These plots would indicate to us that using this type of regression is acceptable and as a result the coefficients and ensuing predictions will be for the most part reliable. 
+
+However, this model is including every variable and in hopes of using a simpler model because simple tend to "travel well" and predict more types of datasets we will examine a few types of dimension reduction and regularization. 
+
+### Linear Regression | Best Subset Model
+
+In hopes of finding a simpler subset model that predicts as well as the full model, it's possible to create a model with every combination of variables.  The approach is called the best subset model, and it is computationally very expensive since the amount of potential models are 2**p.  In our example, we have 21 features, so there are 2,097,152 different model combinations.  We will attempt this model because our dataset is not too large.
+
+```{r include=FALSE}
+
+#install.packages("leaps")
+library(leaps)
+bss= regsubsets(damt ~ reg1 + reg2 + reg3 + reg4 + home + chld + hinc + genf + 
+                  avhv + incm + inca + plow + npro + tgif + lgif + rgif + tdon + tlag + agif + wrat, 
+                data.train.std.y)
+
+reg.summary<- summary(bss)
+reg.summary 
+
+par(mfrow=c(2,2))
+plot(reg.summary$rss ,xlab="Number of Variables ",ylab="RSS",
+     type="l")
+
+plot(reg.summary$adjr2 ,xlab="Number of Variables ",
+     ylab="Adjusted RSq",type="l")
+
+plot(reg.summary$cp ,xlab="Number of Variables ",ylab="Cp", type='l')
+
+plot(reg.summary$bic ,xlab="Number of Variables ",ylab="BIC",
+     type='l')
+
+```
+
+By examining the summary, we can see that the best subset model includes only 8 of the 21 features.  The features that are included have a star in the row for that feature.  The 8 features are:
+
+* lgif
+* reg4
+* chld
+* hinc
+* reg3
+* rgif
+* agif
+* tgif
+
+After these 8 features are included, we don't see any meaningful difference in adjusted r-squared, RSS, BIC, or Mallows' Cp. A strong indicator that we shouldn't include any more features, because the prediction won't get any better but it becomes more complex. Now that we have our simpler model, we can predict our validation dataset with a model that only includes these 8 features.
+
+```{r include=FALSE}
+
+model.bss<- lm(damt ~ lgif + reg4 + chld + hinc + reg3 + rgif + agif + tgif, data.train.std.y)
+pred.valid.bss <- predict(model.bss, newdata = data.valid.std.y) # validation predictions
+
+mean((y.valid - pred.valid.bss)^2) # mean prediction error
+
+sd((y.valid - pred.valid.bss)^2)/sqrt(n.valid.y) # std error
+
+```
+
+The mean squared error is slightly larger than the full model, but it's acheived with significantly less features.  The standard error is essentially the same, which again is promising considering the significantly smaller feature set.  
+
+
+```{r include=FALSE}
+
+layout(matrix(c(1,2,3,4),2,2)) # optional 4 graphs/page 
+plot(model.bss)
+
+```
+
+Plotting the residuals and fitted values we see very similar behavior as we did with the full model.  For the most part the residuals are random and the predictions don't appear have a pattern based on the size of the fitted value.
+
+While this model was simpler, and in theory a model that would accomodate additional datasets than a more complicated one, it didn't predict as well on our validation dataset and therefore will not chose this model.
+
+### Linear Regression | L2 Regularization
+
 
 ```{r include=FALSE}
 
 
 ```
-
-```{r include=FALSE}
-
-
-```
-
-```{r include=FALSE}
-
-
-```
-##### CLASSIFICATION MODELING ######
-
-# linear discriminant analysis
-
-library(MASS)
-
-model.lda1 <- lda(donr ~ reg1 + reg2 + reg3 + reg4 + home + chld + hinc + I(hinc^2) + genf + wrat + 
-                    avhv + incm + inca + plow + npro + tgif + lgif + rgif + tdon + tlag + agif, 
-                  data.train.std.c) # include additional terms on the fly using I()
-
-# Note: strictly speaking, LDA should not be used with qualitative predictors,
-# but in practice it often is if the goal is simply to find a good predictive model
-
-post.valid.lda1 <- predict(model.lda1, data.valid.std.c)$posterior[,2] # n.valid.c post probs
-
-# calculate ordered profit function using average donation = $14.50 and mailing cost = $2
-
-profit.lda1 <- cumsum(14.5*c.valid[order(post.valid.lda1, decreasing=T)]-2)
-plot(profit.lda1) # see how profits change as more mailings are made
-n.mail.valid <- which.max(profit.lda1) # number of mailings that maximizes profits
-c(n.mail.valid, max(profit.lda1)) # report number of mailings and maximum profit
-# 1329.0 11624.5
-
-cutoff.lda1 <- sort(post.valid.lda1, decreasing=T)[n.mail.valid+1] # set cutoff based on n.mail.valid
-chat.valid.lda1 <- ifelse(post.valid.lda1>cutoff.lda1, 1, 0) # mail to everyone above the cutoff
-table(chat.valid.lda1, c.valid) # classification table
-#               c.valid
-#chat.valid.lda1   0   1
-#              0 675  14
-#              1 344 985
-# check n.mail.valid = 344+985 = 1329
-# check profit = 14.5*985-2*1329 = 11624.5
-
-# logistic regression
-
-model.log1 <- glm(donr ~ reg1 + reg2 + reg3 + reg4 + home + chld + hinc + I(hinc^2) + genf + wrat + 
-                    avhv + incm + inca + plow + npro + tgif + lgif + rgif + tdon + tlag + agif, 
-                  data.train.std.c, family=binomial("logit"))
-
-post.valid.log1 <- predict(model.log1, data.valid.std.c, type="response") # n.valid post probs
-
-# calculate ordered profit function using average donation = $14.50 and mailing cost = $2
-
-profit.log1 <- cumsum(14.5*c.valid[order(post.valid.log1, decreasing=T)]-2)
-plot(profit.log1) # see how profits change as more mailings are made
-n.mail.valid <- which.max(profit.log1) # number of mailings that maximizes profits
-c(n.mail.valid, max(profit.log1)) # report number of mailings and maximum profit
-# 1291.0 11642.5
-
-cutoff.log1 <- sort(post.valid.log1, decreasing=T)[n.mail.valid+1] # set cutoff based on n.mail.valid
-chat.valid.log1 <- ifelse(post.valid.log1>cutoff.log1, 1, 0) # mail to everyone above the cutoff
-table(chat.valid.log1, c.valid) # classification table
-#               c.valid
-#chat.valid.log1   0   1
-#              0 709  18
-#              1 310 981
-# check n.mail.valid = 310+981 = 1291
-# check profit = 14.5*981-2*1291 = 11642.5
-
-# Results
-
-# n.mail Profit  Model
-# 1329   11624.5 LDA1
-# 1291   11642.5 Log1
-
-# select model.log1 since it has maximum profit in the validation sample
-
-post.test <- predict(model.log1, data.test.std, type="response") # post probs for test data
-
-# Oversampling adjustment for calculating number of mailings for test set
-
-n.mail.valid <- which.max(profit.log1)
-tr.rate <- .1 # typical response rate is .1
-vr.rate <- .5 # whereas validation response rate is .5
-adj.test.1 <- (n.mail.valid/n.valid.c)/(vr.rate/tr.rate) # adjustment for mail yes
-adj.test.0 <- ((n.valid.c-n.mail.valid)/n.valid.c)/((1-vr.rate)/(1-tr.rate)) # adjustment for mail no
-adj.test <- adj.test.1/(adj.test.1+adj.test.0) # scale into a proportion
-n.mail.test <- round(n.test*adj.test, 0) # calculate number of mailings for test set
-
-cutoff.test <- sort(post.test, decreasing=T)[n.mail.test+1] # set cutoff based on n.mail.test
-chat.test <- ifelse(post.test>cutoff.test, 1, 0) # mail to everyone above the cutoff
-table(chat.test)
-#    0    1 
-# 1676  331
-# based on this model we'll mail to the 331 highest posterior probabilities
 
 # See below for saving chat.test into a file for submission
-
-
 
 ##### PREDICTION MODELING ######
 
