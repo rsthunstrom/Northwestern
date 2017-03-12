@@ -1130,13 +1130,62 @@ After learning the model with our optimal value for lambda on the training set a
 
 ### Principal Components Regression
 
+As we've discussed a few times throughout this report, there appears to be common themes within the feature set, location, income, and previous donation history.  Principal components regression is a mathematical way to attempt to estimate these components.  The principal components are the created by assessing what creates the largest possible variance when we project the observations along a particular component (Section 6.3.1., James, Witten, Hastie, Tibshirani)  The additional components are created by being uncorrelated to the prior component and explaining the most additional variance.  Once these components have been established, we can use these components are features in our regression, rather than the features themselves. 
+
+```{r include=FALSE}
+#install.packages("pls")
+library(pls)
+
+set.seed (1)
+#principal components regression
+model.pcr=pcr(damt~., data=data.train.std.y ,scale=TRUE,
+              validation ="CV")
+
+summary(model.pcr)
+
+validationplot(model.pcr,val.type="MSEP")
+MSEP(model.pcr)
+```
+
+We plot the mean squared error the of the predictions against the number of principal components.  This shows us what is the optimal value for the number of principal components.  The heuristic rule that is advised to use, is to select the number of principal components at the "elbow" of the scree plot.  In this case, we will use 7 principal components.
+
+```{r include=FALSE}
+
+#test MSE at minimum of prior plot
+pcr.pred=predict(model.pcr,data.valid.std.y,ncomp=7)
+mean((y.valid - pcr.pred)^2) # mean prediction error
+sd((y.valid - pcr.pred)^2)/sqrt(n.valid.y) # std error
+
+```
+
+We see that the mean squared error is the highest that we have observed so far.  Even though the standard error is small, signalling that our predictions are accurate, the mean squared error is largest we have seen so far.
+
+Now that we have examined a variety of parametric approaches, we will now consider two tree-based models, random forest and gradient boosted trees.
+
+### Random Forest
 
 ```{r include=FALSE}
 
 
 ```
-Adding shrinking to our coefficients has proved beneficial as the mean squared error of our valdiation dataset has dropped.  
 
+
+```{r include=FALSE}
+
+
+```
+
+
+```{r include=FALSE}
+
+
+```
+
+
+```{r include=FALSE}
+
+
+```
 # See below for saving chat.test into a file for submission
 
 ##### PREDICTION MODELING ######
