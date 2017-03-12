@@ -7,9 +7,9 @@ output: word_document
 
 ## Introduction
 
-The purpose of this report is to aid a charitable organization with their direct marketing efforts.  The charitable organiziation has a list of potential donors with the history of the past donations, this will be the dataset used for the analysis.  The data set consists of 21 features or attributes about the potential donors as well as if the donor has donated in the past, and if so how much.  We will separate the file into a training dataset used to learn the models and a validation dataset which will be used to assess the predictive accuracy of each model.  This analysis will consists of two parts: the first is a classification model used to predict if a target of the direct marketing will donate and a regression model to predict the amount of donation if they were to donate.  These two components will be invaluable to the charity organiziation as they will be able to optimize their mailing for maximum net donations after considering the cost of the mailing.  
+The purpose of this report is to aid a charitable organization with their direct marketing efforts.  The charitable organiziation has a list of potential donors with the history of their past donations.  This will be the dataset used for the analysis.  The data set consists of 21 features or attributes about the potential donors as well as if the donor has donated in the past, and if so, how much.  We will separate the file into a training dataset used to learn the models and a validation dataset which will be used to assess the predictive accuracy of each model.  This analysis will consists of two parts: the first is a classification model used to predict if a target of the direct marketing will donate and a regression model to predict the amount of donation if they were to donate.  These two components will be invaluable to the charity organiziation as they will be able to optimize their mailing for maximum net donations after considering the cost of the mailing.  
 
-Each donor, on average, donates \$14.50 and each piece of direct marketing costs \$2.00. We will use these two metrics in our analysis to define an optimal mailing which will produce the maximum net donations for the charitable organization.  Now that we have describe the goal of the analysis, let's start to expolore the data that is available. 
+Each donor, on average, donates \$14.50 and each piece of direct marketing costs \$2.00. We will use these two metrics in our analysis to define an optimal mailing which will produce the maximum net donations for the charitable organization.  Now that we have described the goal of the analysis, let's start to expolore the data that is available. 
 
 ## Exploratory Data Analysis (EDA)
 
@@ -22,7 +22,7 @@ head(charity)
 
 ```
 
-We notice that we have 24 columns, 1 ID, 20 features, 1 classification dependent variable (DONR), 1 regression dependent variable(DAMT), and 1 column seperating the file into our training, testing, and validation datasets.  Let's split up of file into the three modeling subsets and start to explore the feature set.
+We notice that we have 24 columns, 1 ID, 20 features, 1 classification dependent variable (DONR), 1 regression dependent variable (DAMT), and 1 column seperating the file into our training, testing, and validation datasets.  Let's split up of file into the three modeling subsets and start to explore the feature set.
 
 ```{r include=FALSE}
 data.train <- charity[charity$part=="train",]
@@ -35,7 +35,7 @@ length(data.test[,1])
 
 The training dataset has 3,984 observations and we will validate our models on the validation set which consists of 2,018 observations.  The testing set that we will deploy our final models on has 2,007 observations and we do not have any values for DONR, the binary classification of donor/non-donor or DAMT, the amount of donation for a donor.
 
-Now that our datasets are split, let's examine the feature set of the training dataset.  Listed below is a table of the features encompassed in the dataset and the description for what it represents.  We notice a few groups of features.  We have a few location features, potential donor demographics features, income information about the potential donor's neighborhood features, and past donation and promotion history if applicable. 
+Now that our datasets are split, let's examine the feature set of the training dataset.  Listed below is a table of the features encompassed in the dataset and the description for what it represents.  We notice a few groups of features.  We have a few location features, demographics features, income information about the potential donor's neighborhood features, and past donation and promotion history if applicable. 
 
 Feature | Description
 -----------------------------|-------------------------------------------------
@@ -78,7 +78,7 @@ corrgram(data.training, order=NULL, lower.panel=panel.shade,
 
 ```
 
-In this graphic, the heavily shaded blue boxes are indicating high positive correlations and the heavily shaded red boxes are a representation of a negative correlation.  This correlogram shows us a few things we might except, for example if someone donates, their donation amount is positive.  Additionaly, the regions have a negative correlation with the other regions since each potential donor can only be located in one region.  The features about income are related to donor and donor amount as well.  The heaviest shaded areas for donor and donor amount appear to be the features indicating home ownership and the number of children in the household. 
+In this graphic, the heavily shaded blue boxes are indicating high positive correlations and the heavily shaded red boxes are a representation of a negative correlation.  This correlogram shows us a few things we might except, for example if someone donates, their donation amount is positive, so the dataset seems to be loaded correctly.  Additionaly, the regions have a negative correlation with the other regions since each potential donor can only be located in one region.  The income features are correlated to donor and donor amount as well.  The features with the greatest correlation (positive or negative) with donor and donor amount appear to be the features indicating home ownership and the number of children in the household. 
 
 Let's dig deeper into some of the features that popped from the correlgram.  Plotting the donation amount for the factors of home ownership (home = 0 for non-homeowner, and home = 1 for home owner) reveals the following:
 
@@ -117,7 +117,7 @@ splom(data.training[c(9, 10, 11, 12, 13, 22)], main = 'Income Features', pscales
 
 Examining the top line of the scatterplot matrix we can see how each of the income features impact the donation amount.  It's fairly obvious from this graphic that average home value in neighborhood, average income, and median income in potential donor's neighborhood have a very similar relationship with the donation amount.  The thickness of the amount of 0 donations in each of these feature's grid also tells us that there are a similar amount of non-donors in each of these features as well.  Interestingly, the wealth rating appears to have a slightly different relationship with donation amount telling us that some combination of wealth and income features would be the predictive.  
 
-Historically, income or currency related features tend to have a positive skew, so let's examine them singularly to see if we need to transform them to make them behave more "normal.  Below is a density plot of median income.
+Historically, income or currency related features tend to have a positive skew, so let's examine them singularly to see if we need to transform them to make them behave more "normal".  Below is a density plot of median income.
 
 ```{r include=FALSE}
 
@@ -128,7 +128,7 @@ densityplot(~data.training$incm,
 ```
 
 
-Clearly, we are seeing some skew with this distribution as evidenced by the fat tails on the far left.  Typically a log transformation can take of this type of skewness.  Let's transform each of the income features with a log to verify that we have a created a more normal distribution which will be beneficial for our modeling.
+Clearly, we are seeing some skew with this distribution as evidenced by the fat tails on the far right.  Typically a log transformation can take care of this type of skewness.  Let's transform each of the income features with a log to verify that we have a created a more normal distribution which will be beneficial for our modeling.
 
 ```{r include=FALSE}
 
@@ -171,7 +171,7 @@ splom(data.training[c(18, 19, 22)], main = 'Timing Donation Features', pscales =
 
 Seperating out the timing and dollar donations features we can see two different relationships forming with donation amount.  It would be reasonable to assume that we would like to have some aspect of timing and amount in our modeling; and since the features in these two buckets are very similar we most likely do not need to include all of them.
 
-Let's examing the dollar donation features to see if we need to transform them like we did with the other currency related features.
+Let's examine the dollar donation features to see if we need to transform them like we did with the other currency related features.
 
 ```{r include=FALSE}
 
@@ -355,9 +355,9 @@ c(n.mail.valid, max(profit.lda1))
 
 ```
 
-The maximum profit for the LDA model is $11,355.50 acheived by mailing the first 1391 potential donors of the total 2018 in the validation dataset. The graph does a great job at visualizing the maximum profit.  The profit is steadily rising until we hit the 1,391st potential donor, then it starts to drop telling us that any mailing past that point is a waste.
+The maximum profit for the LDA model is $11,355.50 acheived by mailing the first 1,391 potential donors of the total 2,018 in the validation dataset. The graph does a great job at visualizing the maximum profit.  The profit is steadily rising until we hit the 1,391st potential donor, then it starts to drop telling us that any mailing past that point is a waste.
 
-The 1,391st observation is the cutoff and we will mail to everyone up to that value.  As a result, we will have a certain number of donor responses and non-responses.  Those that respond will produce 14.50 of donations and then we will subtract the total mailing cost from everyone that was mailed to arrive at profit. 
+The 1,391st observation is the cutoff and we will mail to everyone up to that value.  As a result, we will have a certain number of donor responses and non-responses.  Those that respond will produce $14.50 of donations and then we will subtract the total mailing cost from everyone that was mailed to arrive at profit. 
 
 ```{r include=FALSE}
 cutoff.lda1 <- sort(post.valid.lda1, decreasing=T)[n.mail.valid+1] # set cutoff based on n.mail.valid
@@ -412,7 +412,7 @@ $$14.5* 950 (Responders) - 2* 1285 (Total Mail Circulation) = 11,205 (Profit)$$
 
 ## Logistic Regression
 
-Logistic regression is one of the most common and widely used techniques for classification.  It's an expansion of linear regression, but the function is constrained to predictions (which are probabilities) between 0 and 1 through the sigmoid function.  (Section 4.3, James, Witten, Hastie, Tibshirani)  Logistic regression models conditional distribution of Y, which is slightly different than LDA and QDA which model each reponse class seperately.
+Logistic regression is one of the most common and widely used techniques for classification.  It's an expansion of linear regression, but the function is constrained to predictions (which are probabilities) between 0 and 1 through the sigmoid function.  (Section 4.3, James, Witten, Hastie, Tibshirani)  Logistic regression models conditional distribution of Y, which is slightly different than LDA and QDA which model each response class seperately.
 
 
 ```{r include=FALSE}
@@ -429,7 +429,7 @@ plot(perf, main ="ROC Curve for Logistic Regression")
 
 ```
 
-The model appears to producing very similar results to the QDA and LDA models.  When the distribution of the are assumed to be normal, this is common (Section 4.4, James, Witten, Hastie, Tibshirani)
+The model appears to producing very similar results to the QDA and LDA models.  When the distribution of the predictor variables are assumed to be normal, this is common (Section 4.4, James, Witten, Hastie, Tibshirani)
 
 ```{r include=FALSE}
 # calculate ordered profit function using average donation = $14.50 and mailing cost = $2
@@ -439,7 +439,7 @@ n.mail.valid.lr <- which.max(profit.lr)
 c(n.mail.valid.lr, max(profit.lr)) 
 ```
 
-The logistic model produces a maximum profit slightly higher than the other models at $11,390.50 and a circulation of 1446.  This is telling us that this model does a better job at recall the positive responses, which is the objective of the model and the way in which it produces higher profit since the benefit outweighs the cost (14.50 > 2.00)
+The logistic model produces a maximum profit slightly higher than the other models at $11,390.50 and a circulation of 1446.  This is telling us that this model does a better job at recalling the positive responses, which is the objective of the model and the way in which it produces higher profit since the benefit outweighs the cost (14.50 > 2.00)
 
 ```{r include=FALSE}
 cutoff.lr <- sort(post.valid.lr, decreasing=T)[n.mail.valid.lr+1] # set cutoff based on n.mail.valid
@@ -758,10 +758,10 @@ As we saw with the random forest, multiple trees were grown from repeated sampli
 
 ```{r include=FALSE}
 
-install.packages("gbm")
+#install.packages("gbm")
 library(gbm)
 set.seed (1)
-boost=gbm.fix(data.train.std.knn, data.train.std.c$donr,distribution="bernoulli",n.trees=1000, interaction.depth=20)
+boost=gbm.fit(data.train.std.knn, data.train.std.c$donr,distribution="bernoulli",n.trees=1000, interaction.depth=20)
 pred.boost=predict(boost,newdata=data.valid.std.knn, n.trees=100)
 
 predboost <- prediction(pred.boost,data.valid.std.c$donr)
@@ -1304,3 +1304,6 @@ ip <- data.frame(chat=chat.test, yhat=yhat.test) # data frame with two variables
 write.csv(ip, file="RST.csv", row.names=FALSE) # use your initials for the file name
 ```
 
+### Bibliography
+
+James, Gareth, Daniela Witten, Trevor Hastie, and Robert Tibshirani. An Introduction to Statistical Learning with Applications   in R. New York, NY: Springer, 2015. Print.
