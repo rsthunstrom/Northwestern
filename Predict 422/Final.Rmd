@@ -762,7 +762,7 @@ As we saw with the random forest, multiple trees were grown from repeated sampli
 install.packages("gbm")
 library(gbm)
 set.seed (1)
-boost=gbm.fit(data.train.std.knn, data.train.std.c$donr,distribution="bernoulli",n.trees=1000, interaction.depth=20)
+boost=gbm.fix(data.train.std.knn, data.train.std.c$donr,distribution="bernoulli",n.trees=1000, interaction.depth=20)
 pred.boost=predict(boost,newdata=data.valid.std.knn, n.trees=100)
 
 predboost <- prediction(pred.boost,data.valid.std.c$donr)
@@ -1164,7 +1164,58 @@ Now that we have examined a variety of parametric approaches, we will now consid
 
 ### Random Forest
 
+Running a random forest for regression is very similar to the random forest for classification.  We still run a series of decorrelated bootstrap aggregations, but instead of trying to create the biggest decrease in node impurity for misclassification, we are trying to get the biggest decrease in mean squared error.  Essentially the same process, but with a different optimizing parameter.  We will use the same value for m (5 ~ sqrt(21)), as the amount of features we have has stayed the same. 
+
+When we fit the random forest, we will run through a series of tree count, which varies the amount of trees to build in the random forest.  Based on the mean squared error of the validation, we will choose the tree count that produces the minimum value. 
+
 ```{r include=FALSE}
+
+data.train.std.rf <- subset(data.train.std.y, select = -c(damt))
+data.valid.std.rf <- subset(data.valid.std.y, select = -c(damt))
+
+tree_count<- c(10, 50, 100, 500, 1000)
+
+for (i in tree_count) {
+  model.rf=randomForest(data.train.std.rf, data.train.std.y$damt, mtry=5,prox = TRUE, importance = TRUE, ntree = i)
+  pred.rf<- predict(model.rf, data.valid.std.rf)  
+  print(i)
+  print(mean((y.valid - pred.rf)^2)) # mean prediction error
+  print(sd((y.valid - pred.rf)^2)/sqrt(n.valid.y)) # std error
+  }
+
+```
+
+The model with 500 trees has the lowest mean squared error and second lowest standard error of predictions.  This will be the model that we chose when we evalue this model type with regards to the other models we've developed.  Unfortunately, all of these mean squared errors are higher than the linear regression models we've developed. 
+
+As we saw with the classification tree, we can output the feature importances which is the mean decrease in node impurity average over all the trees for a specific feature.  This is insight into which features produce the best splits in the dataset.
+
+```{r include=FALSE}
+
+#plotting feature importance
+varImpPlot (model.rf)
+
+```
+
+Again the children feature is ranked highly and it appears that the past donation features are proving predictive.
+
+Next let's look at a gradient boosted tree regression.
+
+### Gradient Boosted Tree Regression
+
+Like the random forest, the regression version of the gradient boosted tree approach is exactly the same as the classification approach.  We build small sequential trees and the hope is to decrease node impurity as measured by mean squared error.  We will use the same technique we did with the random forest and fit different models with different tree sizes.  The model that produces the minimum mean squared error on the validation set will be the one we chose.
+
+
+```{r include=FALSE}
+
+tree_count<- c(10, 50, 100, 500, 1000)
+
+for (i in tree_count) {
+  model.gbm=gbm.fit(data.train.std.rf, data.train.std.y$damt, distribution = "gaussian", interaction.depth = 20, n.trees = i)
+  pred.gbm<- predict(model.gbm, data.valid.std.rf, n.trees = i)  
+  print(i)
+  print(mean((y.valid - pred.gbm)^2)) # mean prediction error
+  print(sd((y.valid - pred.gbm)^2)/sqrt(n.valid.y)) # std error
+  }
 
 
 ```
