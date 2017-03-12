@@ -933,12 +933,12 @@ Model | Profit
 SVM, Radial Basis Function | $12,136.00
 Random Forest | $11,770.50
 Gradient Boosted Trees | $11,603.50
-Logsitic Regression, L2 Regularization | $11,393
+Logsitic Regression, L2 Regularization | $11,393.00
 Logistic Regression | $11,390.50
 Logsitic Regression, L1 Regularization | $11,379.50
 SVM, Linear | $11,373.50
 Linear Discriminant Analysis | $11,355.50
-Quadractic Discriminant Analysis | $11,205
+Quadractic Discriminant Analysis | $11,205.00
 k-NN Classification | $11,154.00
 
 The choice is an easy one here, as the SVM, radial basis function outperforms all of the models by a significant amount.  The rest of the models perform similarly the the exception of the k-NN classification and QDA. 
