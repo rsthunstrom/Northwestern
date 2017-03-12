@@ -702,7 +702,6 @@ library(randomForest)
 #random forest with m=5
 rf=randomForest(data.train.std.knn, as.factor(data.train.std.c$donr), mtry=5,prox = TRUE, importance = TRUE)
 pred.rf<- predict(rf, data.valid.std.knn, type = "prob")
-pred.rf[,2]
 
 predrf <- prediction(pred.rf[,2],data.valid.std.c$donr)
 perfrf <- performance(predrf,"tpr","fpr")
@@ -843,32 +842,35 @@ Now that we have the optimal value the cost, we fit the model and assess the per
 ```{r include=FALSE}
 testdat=data.frame(x=data.valid.std.knn, y=as.factor(data.valid.std.c$donr))
 
-svmfit=svm(y~., data=testdat, kernel="linear", cost=.01, gamma = 0.04761905, scale=FALSE, decision.values = T, probability = TRUE)
+svmfit=svm(y~., data=dat, kernel="linear", cost=.01, gamma = 0.04761905, scale=FALSE, decision.values = T, probability = TRUE)
+
+
+
+pred.svm<- predict(svmfit, testdat, decision.values = TRUE, probability = TRUE)
+prob.donr<- attr(pred.svm, "probabilities")[,"1"]
+
+roc.pred<- prediction(prob.donr, data.valid.std.c$donr == "1")
+perfsvm <- performance(roc.pred,"tpr","fpr")
+plot(perfsvm, main ="ROC Curve for Linear SVM")
+
 fitted=attributes(predict(svmfit,testdat,
                           decision.values=TRUE))$decision.values
 
-rocplot(fitted, testdat$y, main="ROC of Linear SVM")
 ```
 
 This ROC doesn't appear to be as impressive as what we acheived with the random forest or gradient boosted trees.  Let's evaluate the profit and see if our assumptions are correct. 
 
 ```{r include=FALSE}
+
 # calculate ordered profit function using average donation = $14.50 and mailing cost = $2
-profit.svm <- cumsum(14.5*c.valid[order(fitted, decreasing=T)]-2)
+profit.svm <- cumsum(14.5*c.valid[order(pred.svm, decreasing=T)]-2)
 plot(profit.svm, main="Profit by Circulation") 
 n.mail.valid.svm <- which.max(profit.svm) 
 c(n.mail.valid.svm, max(profit.svm)) 
+
 ```
 
-```{r include=FALSE}
-cutoff.svm <- sort(fitted, decreasing=T)[n.mail.valid.svm+1] # set cutoff based on n.mail.valid
-chat.valid.svm <- ifelse(fitted>cutoff.svm, 1, 0) # mail to everyone above the cutoff
-table(chat.valid.svm, c.valid) # classification table
-```
-
-As we suspected, the profit is only $11,373.50 from a circulation quantity of 1,440.  We are able to classify the majority of responders correctly, but we have too many errors which increase our circulation and decrease total profit.
-
-$$14.5* 983 (Responders) - 2* 1440(Total Mail Circulation) = 11,373.50 (Profit)$$
+As we suspected, the profit is only $10,501.50 from a circulation quantity of 1,818.  
 
 Next let's create a support vector machine with a differnt kernel, one that allows for non-linear decision boundaries.  The kernel we will use next is the RBF, or radial basis function. 
 
@@ -889,40 +891,34 @@ summary(bestmod.rbf)
 
 ```{r include=FALSE}
 
-svmfit.rbf=svm(y~., data=testdat, kernel="radial", cost=5, gamma = 0.04761905, scale=FALSE, decision.values = T, probability = TRUE)
-fitted.rbf=attributes(predict(svmfit.rbf,testdat,
-                          decision.values=TRUE))$decision.values
+svmfit.rbf=svm(y~., data=dat, kernel="radial", cost=5, gamma = 0.04761905, scale=FALSE, decision.values = T, probability = TRUE)
 
-rocplot(fitted.rbf, testdat$y, main="ROC of RBF SVM")
+pred.svm.rbf<- predict(svmfit.rbf, testdat, decision.values = TRUE, probability = TRUE)
+prob.donr.rbf<- attr(pred.svm.rbf, "probabilities")[,"1"]
+
+roc.pred.rbf<- prediction(prob.donr.rbf, data.valid.std.c$donr == "1")
+perfsvm.rbf <- performance(roc.pred.rbf,"tpr","fpr")
+plot(perfsvm.rbf, main ="ROC Curve for SVM with RBF")
+
 ```
 
 This ROC is very promising as we notice a strong pull to the upper left portion of the graph. Let's compare this to the best model we have had so far, the random forest model.
 
 ```{r include=FALSE}
-rocplot(fitted.rbf, testdat$y, main="ROC of RBF SVM and Random Forest", col = 'red')
+plot(perfsvm.rbf, main ="ROC Curve for SVM with RBF and Random Forest", col = "red")
 plot(perfrf, add = TRUE)
 ```
 
-Visually we can see superior performance for the SVM with RBF kernel.  With this type of increase in prediction performance, we would expect significantly better maximum profit.
+Even though the SVM with RBF kernel has good performance, it appears that it's not as strong as the random forest model.  Generating the maximum profit we find that in fact, it's not quite as good as the random forest.  The maximum profit for this model is only $10,981.00
 
 ```{r include=FALSE}
 # calculate ordered profit function using average donation = $14.50 and mailing cost = $2
-profit.svm.rbf <- cumsum(14.5*c.valid[order(fitted.rbf, decreasing=T)]-2)
+profit.svm.rbf <- cumsum(14.5*c.valid[order(pred.svm.rbf, decreasing=T)]-2)
 plot(profit.svm.rbf, main="Profit by Circulation") 
 n.mail.valid.svm.rbf <- which.max(profit.svm.rbf) 
 c(n.mail.valid.svm.rbf, max(profit.svm.rbf)) 
 ```
 
-
-```{r include=FALSE}
-cutoff.svm.rbf <- sort(fitted.rbf, decreasing=T)[n.mail.valid.svm.rbf+1] # set cutoff based on n.mail.valid
-chat.valid.svm.rbf <- ifelse(fitted.rbf>cutoff.svm.rbf, 1, 0) # mail to everyone above the cutoff
-table(chat.valid.svm.rbf, c.valid) # classification table
-```
-
-$$14.5* 992 (Responders) - 2* 1124(Total Mail Circulation) = 12,136 (Profit)$$
-
-The SVM with RBF kernel does a tremendoes job at predicting response and does it very accurately.  As a result, we get the majority of the responders and don't waste a lot of circulation.  This is evidence by the largest profit we have attained thus far. 
 
 ### Classification Summary
 
@@ -930,18 +926,18 @@ The criteria for which we are going to evaluate all of the classification models
 
 Model | Profit
 :---------------------|:------------------------:
-SVM, Radial Basis Function | $12,136.00
 Random Forest | $11,770.50
 Gradient Boosted Trees | $11,603.50
 Logsitic Regression, L2 Regularization | $11,393.00
 Logistic Regression | $11,390.50
 Logsitic Regression, L1 Regularization | $11,379.50
-SVM, Linear | $11,373.50
 Linear Discriminant Analysis | $11,355.50
 Quadractic Discriminant Analysis | $11,205.00
 k-NN Classification | $11,154.00
+SVM, Radial Basis Function | $10,981.00
+SVM, Linear | $10,501.50
 
-The choice is an easy one here, as the SVM, radial basis function outperforms all of the models by a significant amount.  The rest of the models perform similarly the the exception of the k-NN classification and QDA. 
+Here we can see that the random forest model produces the maximum profit. 
 
 Now that we have created our classification model for predicting those that will donate, next we will create a model to predict the amount of donations for those that donate.
 
@@ -1249,66 +1245,62 @@ Principal Components Regression | 1.725119 | 0.1593986
 
 All of the models are fairly close, with the gradient boosted tree with 5000 trees performing the best.  Interestingly, the standard error for principal components regression is approximately the smallest, but the mean is the highest.  As a result, we will chose the gradient boosted tree regression for our final donation amount predictions.
 
+
+### Test Set Predictions
+
+We need to now use the optimal models for classification and regression on our test dataset.  We will fit the support vector machine with radial basis function kernel for our classification, and our 5000 tree gradient boosted regression.  Additionally, we need to adjust for the weighted oversampling in the training and validation datasets for our classification model.
+
 ```{r include=FALSE}
+
+post.test <- predict(rf, data.test.std, type = "prob")[, "1"] # post probs for test data
+
+# Oversampling adjustment for calculating number of mailings for test set
+n.mail.valid <- which.max(profit.rf)
+tr.rate <- .1 # typical response rate is .1
+vr.rate <- .5 # whereas validation response rate is .5
+adj.test.1 <- (n.mail.valid/n.valid.c)/(vr.rate/tr.rate) # adjustment for mail yes
+adj.test.0 <- ((n.valid.c-n.mail.valid)/n.valid.c)/((1-vr.rate)/(1-tr.rate)) # adjustment for mail no
+adj.test <- adj.test.1/(adj.test.1+adj.test.0) # scale into a proportion
+n.mail.test <- round(n.test*adj.test, 0) # calculate number of mailings for test set
+
+cutoff.test <- sort(post.test, decreasing=T)[n.mail.test+1] # set cutoff based on n.mail.test
+chat.test <- ifelse(post.test>cutoff.test, 1, 0) # mail to everyone above the cutoff
+table(chat.test)
+
+```
+
+Here we would mail to 310 of the 2007 potential donors in the test set.  Given the fact that the typical response rate is 0.10, that would tell us that the optimal mailing would be ~200 (2007 * 0.10).  Our model will "waste" a bit of circulation in order to get as many responders as possible.
+
+Now that we have created our donor predictions with our classification model, we will now create our donation amount predictions.
+
+
+```{r include=FALSE}
+
+# select 5000 tree GBM  since it has minimum mean prediction error in the validation sample
+yhat.test <- predict(model.gbm, newdata = data.test.std, n.trees = 5000) # test predictions
 
 
 ```
 
+Now that we have generated our predictions, let's run some quality checks to make sure that we not only generated them without error, but that they make qualitative sense.
 
 ```{r include=FALSE}
-
-
-```
-# See below for saving chat.test into a file for submission
-
-##### PREDICTION MODELING ######
-
-# Least squares regression
-
-model.ls1 <- lm(damt ~ reg1 + reg2 + reg3 + reg4 + home + chld + hinc + genf + wrat + 
-                  avhv + incm + inca + plow + npro + tgif + lgif + rgif + tdon + tlag + agif, 
-                data.train.std.y)
-
-pred.valid.ls1 <- predict(model.ls1, newdata = data.valid.std.y) # validation predictions
-mean((y.valid - pred.valid.ls1)^2) # mean prediction error
-# 1.867523
-sd((y.valid - pred.valid.ls1)^2)/sqrt(n.valid.y) # std error
-# 0.1696615
-
-# drop wrat for illustrative purposes
-model.ls2 <- lm(damt ~ reg1 + reg2 + reg3 + reg4 + home + chld + hinc + genf + 
-                  avhv + incm + inca + plow + npro + tgif + lgif + rgif + tdon + tlag + agif, 
-                data.train.std.y)
-
-pred.valid.ls2 <- predict(model.ls2, newdata = data.valid.std.y) # validation predictions
-mean((y.valid - pred.valid.ls2)^2) # mean prediction error
-# 1.867433
-sd((y.valid - pred.valid.ls2)^2)/sqrt(n.valid.y) # std error
-# 0.1696498
-
-# Results
-
-# MPE  Model
-# 1.867523 LS1
-# 1.867433 LS2
-
-# select model.ls2 since it has minimum mean prediction error in the validation sample
-
-yhat.test <- predict(model.ls2, newdata = data.test.std) # test predictions
-
-
-
-
-# FINAL RESULTS
-
-# Save final results for both classification and regression
 
 length(chat.test) # check length = 2007
 length(yhat.test) # check length = 2007
-chat.test[1:10] # check this consists of 0s and 1s
-yhat.test[1:10] # check this consists of plausible predictions of damt
+chat.test[1:10] 
+yhat.test[1:10] 
 
+densityplot(yhat.test)
+densityplot(data.train.std.y$damt, add = TRUE, col = "red")
+```
+
+We can see that we generated the correct number of predictions and the predictions of our donation amount appear to be in the range that we saw in our training dataset.
+
+Now that we have completed the modeling, let's export the predictions as a .csv file for submission.
+
+```{r include=FALSE}
 ip <- data.frame(chat=chat.test, yhat=yhat.test) # data frame with two variables: chat and yhat
-write.csv(ip, file="ABC.csv", row.names=FALSE) # use your initials for the file name
+write.csv(ip, file="RST.csv", row.names=FALSE) # use your initials for the file name
+```
 
-# submit the csv file in Angel for evaluation based on actual test donr and damt values
