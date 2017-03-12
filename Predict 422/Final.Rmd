@@ -1062,11 +1062,80 @@ While this model was simpler, and in theory a model that would accomodate additi
 
 ### Linear Regression | L2 Regularization
 
+As we saw during our classification example with logistic regression, the L2 regularizing term applies shrinkage to the coefficients.  This shrinkage is to create a trade-off for training set performance and overfitting. This same concept applies to linear regression, but the loss function that we are optimizing is the least squares loss instead of the deviance loss.  Again, we can adjust the tuning paramer, lambda to create more or less shrinkage.  We will again use a cross validated search to determine the optimal value for lambda.  
+
+```{r include=FALSE}
+set.seed (1)
+#library(glmnet)
+#glmnet needs a model matrix
+x_reg<- model.matrix(damt~ ., data.train.std.y)[,-1]
+
+#10-fold cross validated grid search for lambda
+#alpha = 0 for L2/Ridge penalty
+cv.out=cv.glmnet(x_reg,data.train.std.y$damt, type.measure ="mse", alpha = 0)
+plot(cv.out)
+bestlam=cv.out$lambda.min
+bestlam
+```
+
+The cross validated search produces the optimal lambda value of 0.1252.  This will be the amount of regularization that we will use to fit our model.
+
+```{r include=FALSE}
+valid_x_reg<- model.matrix(damt~ ., data.valid.std.y)[,-1]
+
+ridge.reg<- glmnet(x_reg,data.train.std.y$damt, family = "gaussian", alpha = 0, lambda = 0.1252296)
+
+pred.ridge.reg=predict(ridge.reg, newx=valid_x_reg)
+
+mean((y.valid - pred.ridge.reg)^2) # mean prediction error
+
+sd((y.valid - pred.ridge.reg)^2)/sqrt(n.valid.y) # std error
+
+```
+
+The shrinkage here appears to be beneficial as we have acheived the lower mean squared error yet of any of the previous models.  Now let's examine the other regularization term, L1
+
+### Linear Regression | L1 Regularization
+
+As we saw before, the L1 regularizing term can not only apply shrinkage but all dimension reduction as it will let the coefficients drop all the way to 0.  This is a beneficial aspect if a few of the features are explaining the majority of the variance in the response variable, but again if a lot of the features are predictive it will usually underperform the L2 reguralizing term.
+
+```{r include=FALSE}
+
+set.seed (1)
+
+#10-fold cross validated grid search for lambda
+#alpha = 1 for L1/Lasso penalty
+cv.out=cv.glmnet(x_reg,data.train.std.y$damt, type.measure ="mse", alpha = 1)
+plot(cv.out)
+bestlam=cv.out$lambda.min
+bestlam
+
+```
+
+After a cross validate search, we find a small value for lamda (0.002697991), telling us that the model does not need a lot of regularization.  Using this tuned value for lambda, we fit the L1 model.
+
+```{r include=FALSE}
+
+lasso.reg<- glmnet(x_reg,data.train.std.y$damt, family = "gaussian", alpha = 0, lambda = 0.002697991)
+
+pred.lasso.reg=predict(lasso.reg, newx=valid_x_reg)
+
+mean((y.valid - pred.lasso.reg)^2) # mean prediction error
+
+sd((y.valid - pred.lasso.reg)^2)/sqrt(n.valid.y) # std error
+
+```
+
+After learning the model with our optimal value for lambda on the training set and predicting donation amounts from our validation set, we find the lowest mean squared error we have produced so far.  As we discussed above, L1 outperforms L2 when a few of the features are playing a large impact in the variation of the response variable.  This lines up nicely with our best subset model, which produce a model with only 8 features.  
+
+### Principal Components Regression
+
 
 ```{r include=FALSE}
 
 
 ```
+Adding shrinking to our coefficients has proved beneficial as the mean squared error of our valdiation dataset has dropped.  
 
 # See below for saving chat.test into a file for submission
 
