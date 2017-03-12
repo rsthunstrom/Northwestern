@@ -1207,10 +1207,11 @@ Like the random forest, the regression version of the gradient boosted tree appr
 
 ```{r include=FALSE}
 
-tree_count<- c(10, 50, 100, 500, 1000)
+tree_count_gbm<- c(10, 100, 1000, 2000, 5000)
 
-for (i in tree_count) {
-  model.gbm=gbm.fit(data.train.std.rf, data.train.std.y$damt, distribution = "gaussian", interaction.depth = 20, n.trees = i)
+for (i in tree_count_gbm) {
+  model.gbm=gbm.fit(data.train.std.rf, data.train.std.y$damt, distribution = "gaussian", interaction.depth = 20, n.trees = i, 
+                    verbose = FALSE)
   pred.gbm<- predict(model.gbm, data.valid.std.rf, n.trees = i)  
   print(i)
   print(mean((y.valid - pred.gbm)^2)) # mean prediction error
@@ -1220,12 +1221,33 @@ for (i in tree_count) {
 
 ```
 
+Since the gradient boosted model learns "slowly" we need to give it enough time to learn the relationship.  We do this by making it fit more trees.  Here we see that when we fit a large amount of trees, the mean squared error drops down precipitiously.  The 5000 tree model produces a mean squared error of only 1.438698.  
+
+Feature importance:
 
 ```{r include=FALSE}
 
+summary(model.gbm)
 
 ```
 
+We see that past donation history again is proving predictive of future donations.  Again we notice the amount of children in the home as a highly ranked feature. 
+
+### Regression Summary
+
+Let's examine the mean squared prediction error and standard error of our predictions for all of the models we have fit.
+
+Model | Mean Squared Error | Standard Error of Predictions
+:-------------------------------------|:-------------------------:|:-----------------------------------:
+Gradient Boosted Tree Regression | 1.438698 | 0.1652758
+Linear Regression, L1 Regularization | 1.486639 | 0.1591288
+Linear Regression, L2 Regularization | 1.504044 | 0.1608033
+Linear Regression | 1.556378 | 0.161215
+Random Forest Regression | 1.658179 | 0.1724815
+Linear Regression, Best Subset Model | 1.658895 | 0.1607532
+Principal Components Regression | 1.725119 | 0.1593986
+
+All of the models are fairly close, with the gradient boosted tree with 5000 trees performing the best.  Interestingly, the standard error for principal components regression is approximately the smallest, but the mean is the highest.  As a result, we will chose the gradient boosted tree regression for our final donation amount predictions.
 
 ```{r include=FALSE}
 
